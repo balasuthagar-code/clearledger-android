@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "701613571726",
+    "project_id": "clearledger-aa280",
+    "storage_bucket": "clearledger-aa280.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:701613571726:android:61ebf2c580e5b4c3c653df",
+        "android_client_info": {
+          "package_name": "com.example.clearledger"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDih3cONWL-qXpMdSdJ_YDHqrLjYXWS7h0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
