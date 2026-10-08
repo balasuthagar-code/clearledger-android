@@ -2,8 +2,8 @@ package com.example.clearledger.navigation
 
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -20,7 +20,7 @@ fun AppNavigation() {
         startDestination = Routes.REGISTER
     ) {
         composable(Routes.REGISTER) {
-            val viewModel: RegisterViewModel = viewModel()
+            val viewModel: RegisterViewModel = hiltViewModel()
             val state = viewModel.registerState.collectAsStateWithLifecycle().value
 
             RegisterScreen(

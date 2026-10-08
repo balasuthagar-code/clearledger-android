@@ -29,20 +29,37 @@ class RegisterViewModel @Inject constructor(
     }
 
     fun checkIncompleteSetup() {
+        if (_registerState.value is UiState.Loading ||
+            _registerState.value is UiState.Success
+        ) {
+            return
+        }
+
+        _registerState.value = UiState.Loading
+
         viewModelScope.launch {
-            when (val result = authRepository.checkIncompleteSetup()) {
-                is Result.Success -> {
-                    if (result.data != null) {
-                        _registerState.value = UiState.Success(result.data)
+            _registerState.value =
+                when (val result = authRepository.checkIncompleteSetup()) {
+                    is Result.Success -> {
+                        when (val status = result.data) {
+                            is AuthRepository.SetupStatus.NotAuthenticated -> null
+                            is AuthRepository.SetupStatus.Confirmed -> UiState.Success(status.user)
+                            is AuthRepository.SetupStatus.Incomplete -> UiState.Error(
+                                "Your account was created, but your profile could not be saved. Account setup is incomplete.",
+                                canRetryProfile = true
+                            )
+                        }
                     }
+
+                    is Result.Error -> UiState.Error(
+                        result.exception.message ?: "Could not verify setup status.",
+                        canRetryProfile = false
+                    )
                 }
-                is Result.Error -> {}
-            }
         }
     }
 
     fun register(email: String, password: String) {
-        // Ignore repeated taps while registering or after success.
         if (_registerState.value is UiState.Loading ||
             _registerState.value is UiState.Success
         ) {
@@ -58,7 +75,8 @@ class RegisterViewModel @Inject constructor(
 
                     is Result.Error -> UiState.Error(
                         result.exception.message
-                            ?: "Registration failed. Please try again."
+                            ?: "Registration failed. Please try again.",
+                        canRetryProfile = false
                     )
                 }
         }
@@ -79,7 +97,8 @@ class RegisterViewModel @Inject constructor(
                     is Result.Success -> UiState.Success(result.data)
                     is Result.Error -> UiState.Error(
                         result.exception.message
-                            ?: "Profile save failed. Please retry."
+                            ?: "Profile save failed. Please retry.",
+                        canRetryProfile = true
                     )
                 }
         }

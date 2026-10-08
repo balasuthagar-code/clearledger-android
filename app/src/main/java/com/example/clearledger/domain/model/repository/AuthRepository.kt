@@ -12,5 +12,11 @@ interface AuthRepository {
 
     suspend fun retryProfileSetup(): Result<User>
 
-    suspend fun checkIncompleteSetup(): Result<User?>
+    suspend fun checkIncompleteSetup(): Result<SetupStatus>
+
+    sealed interface SetupStatus {
+        data object NotAuthenticated : SetupStatus
+        data class Confirmed(val user: User) : SetupStatus
+        data class Incomplete(val user: User) : SetupStatus
+    }
 }

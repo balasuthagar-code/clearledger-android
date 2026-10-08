@@ -122,29 +122,29 @@ class AuthRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun checkIncompleteSetup(): Result<User?> {
-        val firebaseUser = auth.currentUser ?: return Result.Success(null)
+    override suspend fun checkIncompleteSetup(): Result<AuthRepository.SetupStatus> {
+        val firebaseUser = auth.currentUser
+            ?: return Result.Success(AuthRepository.SetupStatus.NotAuthenticated)
+
         val uid = firebaseUser.uid
+        val email = firebaseUser.email ?: ""
 
         return try {
             val doc = firestore.collection("users").document(uid).get().await()
             if (!doc.exists()) {
-                val user = User(
-                    uid = uid,
-                    email = firebaseUser.email ?: ""
+                Result.Success(
+                    AuthRepository.SetupStatus.Incomplete(User(uid = uid, email = email))
                 )
-                firestore.collection("users")
-                    .document(uid)
-                    .set(user, SetOptions.merge())
-                    .await()
-                Result.Success(user)
             } else {
-                Result.Success(doc.toObject(User::class.java) ?: User(uid = uid, email = firebaseUser.email ?: ""))
+                val user = doc.toObject(User::class.java) ?: User(uid = uid, email = email)
+                Result.Success(
+                    AuthRepository.SetupStatus.Confirmed(user)
+                )
             }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            Result.Error(Exception("Could not verify setup status.", e))
+            Result.Error(Exception("Could not verify setup status. Please check your connection.", e))
         }
     }
 }

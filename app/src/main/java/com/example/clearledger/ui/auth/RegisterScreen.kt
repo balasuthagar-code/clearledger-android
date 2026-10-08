@@ -118,8 +118,10 @@ fun RegisterScreen(
                         text = registerState.message,
                         color = MaterialTheme.colorScheme.error
                     )
-                    Button(onClick = onRetry) {
-                        Text("Retry Profile Setup")
+                    if (registerState.canRetryProfile) {
+                        Button(onClick = onRetry) {
+                            Text("Retry Profile Setup")
+                        }
                     }
                 }
             }
