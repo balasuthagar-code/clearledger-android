@@ -33,6 +33,8 @@ import com.example.clearledger.domain.model.User
 fun RegisterScreen(
     registerState: UiState<User>?,
     onRegister: (String, String) -> Unit,
+    onRetry: () -> Unit = {},
+    onNavigateHome: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var email by rememberSaveable { mutableStateOf("") }
@@ -45,6 +47,7 @@ fun RegisterScreen(
     LaunchedEffect(isSuccess) {
         if (isSuccess) {
             password = ""
+            onNavigateHome()
         }
     }
 
@@ -110,17 +113,27 @@ fun RegisterScreen(
             }
 
             is UiState.Error -> {
-                Text(
-                    text = registerState.message,
-                    color = MaterialTheme.colorScheme.error
-                )
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = registerState.message,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                    Button(onClick = onRetry) {
+                        Text("Retry Profile Setup")
+                    }
+                }
             }
 
             is UiState.Success -> {
-                Text(
-                    text = "Account created successfully.",
-                    color = MaterialTheme.colorScheme.primary
-                )
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "Account created successfully.",
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Button(onClick = onNavigateHome) {
+                        Text("Continue to Home")
+                    }
+                }
             }
 
             null -> Unit

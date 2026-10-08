@@ -10,6 +10,7 @@ import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException
 import com.google.firebase.auth.FirebaseAuthUserCollisionException
 import com.google.firebase.auth.FirebaseAuthWeakPasswordException
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
@@ -93,6 +94,57 @@ class AuthRepositoryImpl @Inject constructor(
                     e
                 )
             )
+        }
+    }
+
+    override suspend fun retryProfileSetup(): Result<User> {
+        val firebaseUser = auth.currentUser
+            ?: return Result.Error(Exception("No authenticated user found."))
+
+        val user = User(
+            uid = firebaseUser.uid,
+            email = firebaseUser.email ?: ""
+        )
+
+        return try {
+            firestore.collection("users")
+                .document(user.uid)
+                .set(user, SetOptions.merge())
+                .await()
+
+            Result.Success(user)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Result.Error(
+                Exception("Could not save your profile. Please try again.", e)
+            )
+        }
+    }
+
+    override suspend fun checkIncompleteSetup(): Result<User?> {
+        val firebaseUser = auth.currentUser ?: return Result.Success(null)
+        val uid = firebaseUser.uid
+
+        return try {
+            val doc = firestore.collection("users").document(uid).get().await()
+            if (!doc.exists()) {
+                val user = User(
+                    uid = uid,
+                    email = firebaseUser.email ?: ""
+                )
+                firestore.collection("users")
+                    .document(uid)
+                    .set(user, SetOptions.merge())
+                    .await()
+                Result.Success(user)
+            } else {
+                Result.Success(doc.toObject(User::class.java) ?: User(uid = uid, email = firebaseUser.email ?: ""))
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Result.Error(Exception("Could not verify setup status.", e))
         }
     }
 }

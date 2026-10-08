@@ -24,6 +24,23 @@ class RegisterViewModel @Inject constructor(
     val registerState: StateFlow<UiState<User>?> =
         _registerState.asStateFlow()
 
+    init {
+        checkIncompleteSetup()
+    }
+
+    fun checkIncompleteSetup() {
+        viewModelScope.launch {
+            when (val result = authRepository.checkIncompleteSetup()) {
+                is Result.Success -> {
+                    if (result.data != null) {
+                        _registerState.value = UiState.Success(result.data)
+                    }
+                }
+                is Result.Error -> {}
+            }
+        }
+    }
+
     fun register(email: String, password: String) {
         // Ignore repeated taps while registering or after success.
         if (_registerState.value is UiState.Loading ||
@@ -42,6 +59,27 @@ class RegisterViewModel @Inject constructor(
                     is Result.Error -> UiState.Error(
                         result.exception.message
                             ?: "Registration failed. Please try again."
+                    )
+                }
+        }
+    }
+
+    fun retryProfileSetup() {
+        if (_registerState.value is UiState.Loading ||
+            _registerState.value is UiState.Success
+        ) {
+            return
+        }
+
+        _registerState.value = UiState.Loading
+
+        viewModelScope.launch {
+            _registerState.value =
+                when (val result = authRepository.retryProfileSetup()) {
+                    is Result.Success -> UiState.Success(result.data)
+                    is Result.Error -> UiState.Error(
+                        result.exception.message
+                            ?: "Profile save failed. Please retry."
                     )
                 }
         }

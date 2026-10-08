@@ -9,4 +9,8 @@ interface AuthRepository {
         email: String,
         password: String
     ): Result<User>
+
+    suspend fun retryProfileSetup(): Result<User>
+
+    suspend fun checkIncompleteSetup(): Result<User?>
 }
