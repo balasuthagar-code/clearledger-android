@@ -9,6 +9,7 @@ sealed interface UiState<out T> {
     ) : UiState<T>
 
     data class Error(
-        val message: String
+        val message: String,
+        val canRetryProfile: Boolean = false
     ) : UiState<Nothing>
 }
