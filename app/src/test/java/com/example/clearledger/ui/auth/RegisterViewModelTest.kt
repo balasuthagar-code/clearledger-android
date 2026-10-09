@@ -115,6 +115,14 @@ class FakeAuthRepository : AuthRepository {
         return resultToReturn
     }
 
+    override suspend fun login(email: String, password: String): Result<User> {
+        return resultToReturn
+    }
+
+    override suspend fun logout(): Result<Unit> {
+        return Result.Success(Unit)
+    }
+
     override suspend fun retryProfileSetup(): Result<User> {
         return retryResultToReturn
     }
