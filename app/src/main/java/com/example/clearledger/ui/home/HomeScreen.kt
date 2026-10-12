@@ -21,6 +21,7 @@ fun HomeScreen(
     onIncomeSources: () -> Unit,
     onIncomeEntries: () -> Unit,
     onSavingsGoals: () -> Unit,
+    onSavingsContributions: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -59,6 +60,12 @@ fun HomeScreen(
             modifier = Modifier.fillMaxWidth()
         ) {
             Text("Savings Goals")
+        }
+        Button(
+            onClick = onSavingsContributions,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Savings Contributions")
         }
     }
 }

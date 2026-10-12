@@ -31,6 +31,10 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.clearledger.ui.goals.CreateGoalScreen
 import com.example.clearledger.ui.goals.SavingsGoalsViewModel
 
+import com.example.clearledger.ui.goals.SavingsContributionsScreen
+import androidx.compose.material3.Button
+import androidx.compose.material3.Text
+import androidx.compose.foundation.layout.fillMaxWidth
 
 @Composable
 fun AppNavigation() {
@@ -122,6 +126,9 @@ fun AppNavigation() {
                 onSavingsGoals = {
                     navController.navigate(Routes.SAVINGS_GOALS)
                 },
+                onSavingsContributions = {
+                    navController.navigate(Routes.SAVINGS_CONTRIBUTIONS)
+                },
                 onIncomeSources = {
                     navController.navigate(Routes.INCOME_SOURCES)
                 },
@@ -140,6 +147,9 @@ fun AppNavigation() {
         }
         composable(Routes.SAVINGS_GOALS) {
             CreateGoalScreen()
+        }
+        composable(Routes.SAVINGS_CONTRIBUTIONS) {
+            SavingsContributionsScreen()
         }
     }
 }
