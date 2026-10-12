@@ -15,6 +15,7 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun HomeScreen(
     onLogout: () -> Unit,
+    onIncomeSources: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -30,8 +31,15 @@ fun HomeScreen(
         )
 
         Button(
-            onClick = onLogout,
+            onClick = onIncomeSources,
             modifier = Modifier.padding(top = 24.dp)
+        ) {
+            Text("Manage Income Sources")
+        }
+
+        Button(
+            onClick = onLogout,
+            modifier = Modifier.padding(top = 16.dp)
         ) {
             Text("Logout")
         }

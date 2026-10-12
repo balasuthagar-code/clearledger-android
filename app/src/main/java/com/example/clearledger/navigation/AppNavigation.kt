@@ -21,6 +21,12 @@ import com.example.clearledger.ui.auth.SplashViewModel
 import com.example.clearledger.ui.home.HomeScreen
 import com.example.clearledger.ui.home.HomeViewModel
 
+import androidx.compose.material3.Button
+import androidx.compose.material3.Text
+import com.example.clearledger.ui.income.IncomeSourcesScreen
+import com.example.clearledger.ui.income.IncomeSourcesViewModel
+
+
 @Composable
 fun AppNavigation() {
     val navController = rememberNavController()
@@ -103,10 +109,20 @@ fun AppNavigation() {
                 onLogout = {
                     viewModel.logout()
                     navController.navigate(Routes.LOGIN) {
-                        popUpTo(Routes.HOME) { inclusive = true }
+                        popUpTo(Routes.HOME) {
+                            inclusive = true
+                        }
                     }
+                },
+                onIncomeSources = {
+                    navController.navigate(Routes.INCOME_SOURCES)
                 }
             )
+        }
+
+        composable(Routes.INCOME_SOURCES) {
+            val viewModel: IncomeSourcesViewModel = hiltViewModel()
+            IncomeSourcesScreen(viewModel = viewModel)
         }
     }
 }
