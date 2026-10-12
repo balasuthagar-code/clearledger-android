@@ -27,6 +27,9 @@ import androidx.compose.material3.Text
 import com.example.clearledger.ui.income.IncomeEntriesScreen
 import com.example.clearledger.ui.income.IncomeEntriesViewModel
 
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.example.clearledger.ui.goals.CreateGoalScreen
+import com.example.clearledger.ui.goals.SavingsGoalsViewModel
 
 
 @Composable
@@ -116,15 +119,27 @@ fun AppNavigation() {
                         }
                     }
                 },
+                onSavingsGoals = {
+                    navController.navigate(Routes.SAVINGS_GOALS)
+                },
                 onIncomeSources = {
                     navController.navigate(Routes.INCOME_SOURCES)
-                }
+                },
             )
         }
+
 
         composable(Routes.INCOME_ENTRIES) {
             val viewModel: IncomeEntriesViewModel = hiltViewModel()
             IncomeEntriesScreen(viewModel = viewModel)
+        }
+
+        composable(Routes.SAVINGS_GOALS) {
+            val viewModel: SavingsGoalsViewModel = hiltViewModel()
+            CreateGoalScreen(viewModel = viewModel)
+        }
+        composable(Routes.SAVINGS_GOALS) {
+            CreateGoalScreen()
         }
     }
 }

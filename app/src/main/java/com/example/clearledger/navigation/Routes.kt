@@ -9,4 +9,6 @@ object Routes {
 
     const val INCOME_SOURCES = "income_sources"
     const val INCOME_ENTRIES = "income_entries"
+
+    const val SAVINGS_GOALS = "savings_goals"
 }

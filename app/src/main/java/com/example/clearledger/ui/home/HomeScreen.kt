@@ -12,11 +12,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 
+import androidx.compose.material3.Button
+import androidx.compose.material3.Text
+import androidx.compose.foundation.layout.fillMaxWidth
 @Composable
 fun HomeScreen(
     onLogout: () -> Unit,
     onIncomeSources: () -> Unit,
     onIncomeEntries: () -> Unit,
+    onSavingsGoals: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -49,6 +53,12 @@ fun HomeScreen(
             modifier = Modifier.padding(top = 16.dp)
         ) {
             Text("Record Income / History")
+        }
+        Button(
+            onClick = onSavingsGoals,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Savings Goals")
         }
     }
 }

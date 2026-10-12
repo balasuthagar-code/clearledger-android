@@ -71,5 +71,6 @@ dependencies {
     implementation("com.google.firebase:firebase-auth:<your-existing-version>")
     implementation("com.google.firebase:firebase-firestore:<your-existing-version>")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:<your-existing-version>")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:<compatible-version>")
 
 }
