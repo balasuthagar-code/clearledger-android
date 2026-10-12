@@ -7,6 +7,6 @@ object Routes {
     const val REGISTER = "register"
     const val HOME = "home"
 
-    // Member 2: Income source management
     const val INCOME_SOURCES = "income_sources"
+    const val INCOME_ENTRIES = "income_entries"
 }

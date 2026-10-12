@@ -23,8 +23,10 @@ import com.example.clearledger.ui.home.HomeViewModel
 
 import androidx.compose.material3.Button
 import androidx.compose.material3.Text
-import com.example.clearledger.ui.income.IncomeSourcesScreen
-import com.example.clearledger.ui.income.IncomeSourcesViewModel
+
+import com.example.clearledger.ui.income.IncomeEntriesScreen
+import com.example.clearledger.ui.income.IncomeEntriesViewModel
+
 
 
 @Composable
@@ -120,9 +122,9 @@ fun AppNavigation() {
             )
         }
 
-        composable(Routes.INCOME_SOURCES) {
-            val viewModel: IncomeSourcesViewModel = hiltViewModel()
-            IncomeSourcesScreen(viewModel = viewModel)
+        composable(Routes.INCOME_ENTRIES) {
+            val viewModel: IncomeEntriesViewModel = hiltViewModel()
+            IncomeEntriesScreen(viewModel = viewModel)
         }
     }
 }

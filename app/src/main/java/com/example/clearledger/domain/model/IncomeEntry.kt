@@ -5,11 +5,12 @@ data class IncomeEntry(
     val id: String = "",
     val sourceId: String = "",
     val sourceName: String = "",
-    val amount: Double = 0.0,
+    val originalAmountMinor: Long = 0L,
     val currency: String = "LKR",
-    val exchangeRate: Double? = null,
-    val amountInBaseCurrency: Double = 0.0,
+    val exchangeRate: String = "1",
+    val baseAmountMinor: Long = 0L,
     val date: String = "",
     val monthKey: String = "",
-    val note: String = ""
+    val note: String = "",
+    val status: String = "EXPECTED"
 )

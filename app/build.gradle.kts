@@ -66,5 +66,10 @@ dependencies {
     androidTestImplementation(libs.androidx.junit)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     debugImplementation(libs.androidx.compose.ui.tooling)
+    implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:<your-existing-version>")
+    implementation("androidx.hilt:hilt-navigation-compose:<your-existing-version>")
+    implementation("com.google.firebase:firebase-auth:<your-existing-version>")
+    implementation("com.google.firebase:firebase-firestore:<your-existing-version>")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:<your-existing-version>")
 
 }

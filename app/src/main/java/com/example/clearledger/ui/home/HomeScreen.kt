@@ -16,6 +16,7 @@ import androidx.compose.ui.unit.dp
 fun HomeScreen(
     onLogout: () -> Unit,
     onIncomeSources: () -> Unit,
+    onIncomeEntries: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -42,6 +43,12 @@ fun HomeScreen(
             modifier = Modifier.padding(top = 16.dp)
         ) {
             Text("Logout")
+        }
+        Button(
+            onClick = onIncomeEntries,
+            modifier = Modifier.padding(top = 16.dp)
+        ) {
+            Text("Record Income / History")
         }
     }
 }
