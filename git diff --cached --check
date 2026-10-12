@@ -1,0 +1,123 @@
+[1mdiff --git a/app/src/main/java/com/example/clearledger/data/repository/FirestoreIncomeEntryRepository.kt b/app/src/main/java/com/example/clearledger/data/repository/FirestoreIncomeEntryRepository.kt[m
+[1mindex fcab4bf..e928e96 100644[m
+[1m--- a/app/src/main/java/com/example/clearledger/data/repository/FirestoreIncomeEntryRepository.kt[m
+[1m+++ b/app/src/main/java/com/example/clearledger/data/repository/FirestoreIncomeEntryRepository.kt[m
+[36m@@ -1,4 +1,115 @@[m
+ package com.example.clearledger.data.repository[m
+ [m
+[31m-class FirestoreIncomeEntryRepository {[m
+[31m-}[m
+\ No newline at end of file[m
+[32m+[m[32mimport com.example.clearledger.domain.model.IncomeEntry[m
+[32m+[m[32mimport com.google.firebase.Timestamp[m
+[32m+[m[32mimport com.google.firebase.auth.FirebaseAuth[m
+[32m+[m[32mimport com.google.firebase.firestore.FirebaseFirestore[m
+[32m+[m[32mimport kotlinx.coroutines.channels.awaitClose[m
+[32m+[m[32mimport kotlinx.coroutines.flow.Flow[m
+[32m+[m[32mimport kotlinx.coroutines.flow.callbackFlow[m
+[32m+[m[32mimport kotlinx.coroutines.tasks.await[m
+[32m+[m[32mimport java.time.LocalDate[m
+[32m+[m[32mimport java.time.ZoneId[m
+[32m+[m[32mimport java.util.Date[m
+[32m+[m[32mimport javax.inject.Inject[m
+[32m+[m
+[32m+[m[32mclass FirestoreIncomeEntryRepository @Inject constructor([m
+[32m+[m[32m    private val auth: FirebaseAuth,[m
+[32m+[m[32m    private val firestore: FirebaseFirestore[m
+[32m+[m[32m) : IncomeEntryRepository {[m
+[32m+[m
+[32m+[m[32m    private fun collection() =[m
+[32m+[m[32m        firestore.collection("users")[m
+[32m+[m[32m            .document(auth.currentUser?.uid[m
+[32m+[m[32m                ?: throw IllegalStateException("Please log in first"))[m
+[32m+[m[32m            .collection("incomeEntries")[m
+[32m+[m
+[32m+[m[32m    override fun getIncomeEntries(): Flow<List<IncomeEntry>> =[m
+[32m+[m[32m        callbackFlow {[m
+[32m+[m[32m            val listener = collection()[m
+[32m+[m[32m                .orderBy("date", com.google.firebase.firestore.Query.Direction.DESCENDING)[m
+[32m+[m[32m                .addSnapshotListener { snapshot, error ->[m
+[32m+[m[32m                    if (error != null) {[m
+[32m+[m[32m                        close(error)[m
+[32m+[m[32m                        return@addSnapshotListener[m
+[32m+[m[32m                    }[m
+[32m+[m
+[32m+[m[32m                    val entries = snapshot?.documents?.mapNotNull { document ->[m
+[32m+[m[32m                        val timestamp = document.getTimestamp("date")[m
+[32m+[m[32m                        val date = timestamp?.toDate()?.toInstant()[m
+[32m+[m[32m                            ?.atZone(ZoneId.of("Asia/Colombo"))[m
+[32m+[m[32m                            ?.toLocalDate()?.toString() ?: return@mapNotNull null[m
+[32m+[m
+[32m+[m[32m                        IncomeEntry([m
+[32m+[m[32m                            id = document.id,[m
+[32m+[m[32m                            sourceId = document.getString("sourceId") ?: "",[m
+[32m+[m[32m                            sourceName = document.getString("sourceName") ?: "",[m
+[32m+[m[32m                            originalAmountMinor = document.getLong("originalAmountMinor") ?: 0L,[m
+[32m+[m[32m                            currency = document.getString("currency") ?: "LKR",[m
+[32m+[m[32m                            exchangeRate = document.getString("exchangeRate") ?: "1",[m
+[32m+[m[32m                            baseAmountMinor = document.getLong("baseAmountMinor") ?: 0L,[m
+[32m+[m[32m                            date = date,[m
+[32m+[m[32m                            monthKey = document.getString("monthKey") ?: date.substring(0, 7),[m
+[32m+[m[32m                            note = document.getString("note") ?: "",[m
+[32m+[m[32m                            status = document.getString("status") ?: "EXPECTED"[m
+[32m+[m[32m                        )[m
+[32m+[m[32m                    } ?: emptyList()[m
+[32m+[m
+[32m+[m[32m                    trySend(entries)[m
+[32m+[m[32m                }[m
+[32m+[m
+[32m+[m[32m            awaitClose { listener.remove() }[m
+[32m+[m[32m        }[m
+[32m+[m
+[32m+[m[32m    override suspend fun addIncomeEntry(entry: IncomeEntry) {[m
+[32m+[m[32m        val date = LocalDate.parse(entry.date)[m
+[32m+[m[32m            .atStartOfDay(ZoneId.of("Asia/Colombo"))[m
+[32m+[m[32m            .toInstant()[m
+[32m+[m
+[32m+[m[32m        val data = mapOf([m
+[32m+[m[32m            "sourceId" to entry.sourceId,[m
+[32m+[m[32m            "sourceName" to entry.sourceName,[m
+[32m+[m[32m            "originalAmountMinor" to entry.originalAmountMinor,[m
+[32m+[m[32m            "currency" to entry.currency,[m
+[32m+[m[32m            "exchangeRate" to entry.exchangeRate,[m
+[32m+[m[32m            "baseAmountMinor" to entry.baseAmountMinor,[m
+[32m+[m[32m            "date" to Timestamp(Date.from(date)),[m
+[32m+[m[32m            "monthKey" to entry.monthKey,[m
+[32m+[m[32m            "note" to entry.note,[m
+[32m+[m[32m            "status" to entry.status,[m
+[32m+[m[32m            "createdAt" to Timestamp.now(),[m
+[32m+[m[32m            "updatedAt" to Timestamp.now()[m
+[32m+[m[32m        )[m
+[32m+[m
+[32m+[m[32m        collection().add(data).await()[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    override suspend fun updateIncomeEntry(entry: IncomeEntry) {[m
+[32m+[m[32m        require(entry.id.isNotBlank()) { "Income entry ID is missing" }[m
+[32m+[m
+[32m+[m[32m        val date = LocalDate.parse(entry.date)[m
+[32m+[m[32m            .atStartOfDay(ZoneId.of("Asia/Colombo"))[m
+[32m+[m[32m            .toInstant()[m
+[32m+[m
+[32m+[m[32m        val data = mapOf([m
+[32m+[m[32m            "sourceId" to entry.sourceId,[m
+[32m+[m[32m            "sourceName" to entry.sourceName,[m
+[32m+[m[32m            "originalAmountMinor" to entry.originalAmountMinor,[m
+[32m+[m[32m            "currency" to entry.currency,[m
+[32m+[m[32m            "exchangeRate" to entry.exchangeRate,[m
+[32m+[m[32m            "baseAmountMinor" to entry.baseAmountMinor,[m
+[32m+[m[32m            "date" to Timestamp(Date.from(date)),[m
+[32m+[m[32m            "monthKey" to entry.monthKey,[m
+[32m+[m[32m            "note" to entry.note,[m
+[32m+[m[32m            "status" to entry.status,[m
+[32m+[m[32m            "updatedAt" to Timestamp.now()[m
+[32m+[m[32m        )[m
+[32m+[m
+[32m+[m[32m        collection().document(entry.id).update(data).await()[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    override suspend fun deleteIncomeEntry(entryId: String) {[m
+[32m+[m[32m        require(entryId.isNotBlank()) { "Income entry ID is missing" }[m
+[32m+[m[32m        collection().document(entryId).delete().await()[m
+[32m+[m[32m    }[m
+[32m+[m[32m}[m
