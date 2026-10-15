@@ -7,6 +7,7 @@ import com.example.clearledger.domain.repository.AuthRepository
 import com.google.firebase.FirebaseNetworkException
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException
+import com.google.firebase.auth.FirebaseAuthInvalidUserException
 import com.google.firebase.auth.FirebaseAuthUserCollisionException
 import com.google.firebase.auth.FirebaseAuthWeakPasswordException
 import com.google.firebase.firestore.FirebaseFirestore
@@ -19,6 +20,79 @@ class AuthRepositoryImpl @Inject constructor(
     private val auth: FirebaseAuth,
     private val firestore: FirebaseFirestore
 ) : AuthRepository {
+
+    override suspend fun login(
+        email: String,
+        password: String
+    ): Result<User> {
+        val cleanEmail = email.trim()
+
+        if (!Patterns.EMAIL_ADDRESS.matcher(cleanEmail).matches()) {
+            return Result.Error(
+                IllegalArgumentException("Enter a valid email address.")
+            )
+        }
+
+        if (password.isEmpty()) {
+            return Result.Error(
+                IllegalArgumentException("Password cannot be empty.")
+            )
+        }
+
+        val firebaseUser = try {
+            auth.signInWithEmailAndPassword(cleanEmail, password)
+                .await()
+                .user
+                ?: return Result.Error(
+                    IllegalStateException("Could not confirm sign in.")
+                )
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            val message = when {
+                e is FirebaseAuthInvalidUserException || e is FirebaseAuthInvalidCredentialsException ->
+                    "Invalid email or password. Please try again."
+
+                e is FirebaseNetworkException ->
+                    "Could not connect. Check your internet connection."
+
+                e is com.google.firebase.auth.FirebaseAuthException && e.errorCode == "ERROR_TOO_MANY_REQUESTS" ->
+                    "Too many failed login attempts. Please try again later."
+
+                else ->
+                    "Could not sign in. Please try again."
+            }
+            return Result.Error(Exception(message, e))
+        }
+
+        val uid = firebaseUser.uid
+        val fallbackEmail = firebaseUser.email ?: cleanEmail
+
+        return try {
+            val doc = firestore.collection("users").document(uid).get().await()
+            val user = if (doc.exists()) {
+                doc.toObject(User::class.java) ?: User(uid = uid, email = fallbackEmail)
+            } else {
+                User(uid = uid, email = fallbackEmail)
+            }
+            Result.Success(user)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Result.Error(Exception("Signed in, but could not load profile.", e))
+        }
+    }
+
+    override suspend fun logout(): Result<Unit> {
+        return try {
+            auth.signOut()
+            Result.Success(Unit)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Result.Error(Exception("Could not sign out. Please try again.", e))
+        }
+    }
 
     override suspend fun register(
         email: String,

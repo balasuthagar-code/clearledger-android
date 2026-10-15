@@ -10,6 +10,13 @@ interface AuthRepository {
         password: String
     ): Result<User>
 
+    suspend fun login(
+        email: String,
+        password: String
+    ): Result<User>
+
+    suspend fun logout(): Result<Unit>
+
     suspend fun retryProfileSetup(): Result<User>
 
     suspend fun checkIncompleteSetup(): Result<SetupStatus>
