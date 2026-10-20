@@ -11,6 +11,7 @@ import com.example.clearledger.domain.repository.ExpenseRepository
 import com.example.clearledger.domain.repository.IncomeSummarySource
 import com.example.clearledger.domain.usecase.CalculateMonthlySummaryUseCase
 import com.example.clearledger.domain.usecase.ObserveMonthlySummaryUseCase
+import com.example.clearledger.testutil.InMemoryExpenseRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -43,14 +44,10 @@ class DashboardViewModelTest {
     @After
     fun tearDown() { Dispatchers.resetMain() }
 
-    // ---- small fakes for the three things the ViewModel depends on ----
-    private class FakeExpenses(initial: List<Expense> = emptyList()) : ExpenseRepository {
-        val data = MutableStateFlow(initial)
-        override fun observeExpensesForMonth(monthKey: String): Flow<List<Expense>> =
-            data.map { list -> list.filter { it.monthKey == monthKey } }
-    }
+    // ---- small fakes for the things the ViewModel depends on ----
+    private class FakeExpenses(initial: List<Expense> = emptyList()) : InMemoryExpenseRepository(initial)
 
-    private class FailingExpenses : ExpenseRepository {
+    private class FailingExpenses : InMemoryExpenseRepository() {
         override fun observeExpensesForMonth(monthKey: String): Flow<List<Expense>> =
             flow { throw RuntimeException("boom") }
     }

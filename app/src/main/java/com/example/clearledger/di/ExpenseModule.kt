@@ -1,8 +1,8 @@
 package com.example.clearledger.di
 
-import com.example.clearledger.data.fake.FakeExpenseRepository
 import com.example.clearledger.data.fake.FakeIncomeSummarySource
 import com.example.clearledger.data.repository.FirestoreCategoryRepository
+import com.example.clearledger.data.repository.FirestoreExpenseRepository
 import com.example.clearledger.domain.repository.CategoryRepository
 import com.example.clearledger.domain.repository.ExpenseRepository
 import com.example.clearledger.domain.repository.IncomeSummarySource
@@ -24,11 +24,12 @@ abstract class ExpenseModule {
     @Singleton
     abstract fun bindCategoryRepository(impl: FirestoreCategoryRepository): CategoryRepository
 
-    // TEMPORARY bindings - replaced in Sprint 2 (expenses) and by Member 2 (income)
+    // Sprint 2: expenses are now real (Firestore). The Fake is no longer bound.
     @Binds
     @Singleton
-    abstract fun bindExpenseRepository(impl: FakeExpenseRepository): ExpenseRepository
+    abstract fun bindExpenseRepository(impl: FirestoreExpenseRepository): ExpenseRepository
 
+    // TEMPORARY until Member 2 implements IncomeSummarySource on the real income repository
     @Binds
     @Singleton
     abstract fun bindIncomeSummarySource(impl: FakeIncomeSummarySource): IncomeSummarySource

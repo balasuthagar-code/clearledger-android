@@ -2,7 +2,12 @@ package com.example.clearledger.navigation
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
@@ -20,7 +25,11 @@ import com.example.clearledger.ui.auth.SplashState
 import com.example.clearledger.ui.auth.SplashViewModel
 import com.example.clearledger.ui.home.HomeScreen
 import com.example.clearledger.ui.home.HomeViewModel
-
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.ui.unit.dp
 @Composable
 fun AppNavigation() {
     val navController = rememberNavController()
@@ -29,27 +38,38 @@ fun AppNavigation() {
         navController = navController,
         startDestination = Routes.SPLASH
     ) {
+        expenseGraph(navController)
         composable(Routes.SPLASH) {
             val splashViewModel: SplashViewModel = hiltViewModel()
-            val state = splashViewModel.splashState.collectAsStateWithLifecycle().value
+            val state =
+                splashViewModel.splashState.collectAsStateWithLifecycle().value
 
             LaunchedEffect(state) {
                 when (state) {
                     SplashState.NavigateHome -> {
                         navController.navigate(Routes.HOME) {
-                            popUpTo(Routes.SPLASH) { inclusive = true }
+                            popUpTo(Routes.SPLASH) {
+                                inclusive = true
+                            }
                         }
                     }
+
                     SplashState.NavigateLogin -> {
                         navController.navigate(Routes.LOGIN) {
-                            popUpTo(Routes.SPLASH) { inclusive = true }
+                            popUpTo(Routes.SPLASH) {
+                                inclusive = true
+                            }
                         }
                     }
+
                     SplashState.NavigateRegister -> {
                         navController.navigate(Routes.REGISTER) {
-                            popUpTo(Routes.SPLASH) { inclusive = true }
+                            popUpTo(Routes.SPLASH) {
+                                inclusive = true
+                            }
                         }
                     }
+
                     SplashState.Loading -> Unit
                 }
             }
@@ -64,17 +84,22 @@ fun AppNavigation() {
 
         composable(Routes.LOGIN) {
             val viewModel: LoginViewModel = hiltViewModel()
-            val state = viewModel.loginState.collectAsStateWithLifecycle().value
+            val state =
+                viewModel.loginState.collectAsStateWithLifecycle().value
 
             LoginScreen(
                 loginState = state,
-                onLogin = { email, password -> viewModel.login(email, password) },
+                onLogin = { email, password ->
+                    viewModel.login(email, password)
+                },
                 onNavigateRegister = {
                     navController.navigate(Routes.REGISTER)
                 },
                 onNavigateHome = {
                     navController.navigate(Routes.HOME) {
-                        popUpTo(Routes.LOGIN) { inclusive = true }
+                        popUpTo(Routes.LOGIN) {
+                            inclusive = true
+                        }
                     }
                 }
             )
@@ -82,15 +107,22 @@ fun AppNavigation() {
 
         composable(Routes.REGISTER) {
             val viewModel: RegisterViewModel = hiltViewModel()
-            val state = viewModel.registerState.collectAsStateWithLifecycle().value
+            val state =
+                viewModel.registerState.collectAsStateWithLifecycle().value
 
             RegisterScreen(
                 registerState = state,
-                onRegister = { email, password -> viewModel.register(email, password) },
-                onRetry = { viewModel.retryProfileSetup() },
+                onRegister = { email, password ->
+                    viewModel.register(email, password)
+                },
+                onRetry = {
+                    viewModel.retryProfileSetup()
+                },
                 onNavigateHome = {
                     navController.navigate(Routes.HOME) {
-                        popUpTo(Routes.REGISTER) { inclusive = true }
+                        popUpTo(Routes.REGISTER) {
+                            inclusive = true
+                        }
                     }
                 }
             )
@@ -99,14 +131,49 @@ fun AppNavigation() {
         composable(Routes.HOME) {
             val viewModel: HomeViewModel = hiltViewModel()
 
-            HomeScreen(
-                onLogout = {
-                    viewModel.logout()
-                    navController.navigate(Routes.LOGIN) {
-                        popUpTo(Routes.HOME) { inclusive = true }
+            Scaffold(
+                floatingActionButton = {
+                    FloatingActionButton(
+                        onClick = {
+                            navController.navigate(ExpenseRoutes.add())
+                        }
+                    ) {
+                        Text("+")
+                    }
+                },
+                bottomBar = {
+                    androidx.compose.foundation.layout.Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        horizontalArrangement =
+                            androidx.compose.foundation.layout.Arrangement.Center
+                    ) {
+                        TextButton(
+                            onClick = {
+                                navController.navigate(ExpenseRoutes.LIST)
+                            }
+                        ) {
+                            Text("All expenses")
+                        }
                     }
                 }
-            )
+            ) { padding ->
+                Box(
+                    modifier = Modifier.padding(padding)
+                ) {
+                    HomeScreen(
+                        onLogout = {
+                            viewModel.logout()
+                            navController.navigate(Routes.LOGIN) {
+                                popUpTo(Routes.HOME) {
+                                    inclusive = true
+                                }
+                            }
+                        }
+                    )
+                }
+            }
         }
     }
 }

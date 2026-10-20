@@ -3,8 +3,8 @@ package com.example.clearledger.domain.model
 import java.time.LocalDate
 
 /**
- * Minimal Expense model - enough for the monthly summary in Sprint 1.
- * Sprint 2 (Quick-add story) adds the Firestore DTO, repository implementation and validation.
+ * The expense as the app sees it. Stored in Firestore at users/{uid}/expenses/{id}
+ * (see data/dto/ExpenseMapper.kt for the exact field names).
  *
  * Money rule: every amount is a Long in MINOR units (LKR 1,250.50 -> 125050).
  * baseAmountMinor is the value in the user's base currency (LKR); every total uses THIS field.
@@ -21,5 +21,6 @@ data class Expense(
     val merchant: String = "",
     val note: String = "",
     val date: LocalDate,
-    val monthKey: String              // "YYYY-MM"
+    val monthKey: String,             // "YYYY-MM"
+    val createdAtMillis: Long = 0L    // used only to order expenses of the same day (newest first)
 )
