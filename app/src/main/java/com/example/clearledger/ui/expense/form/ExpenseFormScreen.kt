@@ -172,9 +172,6 @@ fun ExpenseFormScreen(
                         }
                     }
                 }
-                if (state.merchant.isNotBlank()) {
-                    Text("Merchant: ${state.merchant}", style = MaterialTheme.typography.bodySmall)
-                }
 
                 // ---- step 2: category ----
                 Text("Category", style = MaterialTheme.typography.titleSmall)

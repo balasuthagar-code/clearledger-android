@@ -26,13 +26,24 @@ class SuggestMerchantsUseCase @Inject constructor() {
             }
             .sortedWith(compareByDescending<MerchantSuggestion> { it.useCount }.thenBy { it.name.lowercase() })
 
-    /** Blank [typed] -> the most used merchants; otherwise names starting with it, then names containing it. */
+    /**
+     * Blank [typed] -> the most used merchants; otherwise an exact match first, then names starting with
+     * it, then names containing it. An exact match is KEPT so the user can still tap the full name
+     * (which also recalls its usual category); the screen shows it as selected.
+     */
     operator fun invoke(memory: List<MerchantSuggestion>, typed: String, limit: Int = DEFAULT_LIMIT): List<MerchantSuggestion> {
         val query = typed.trim().lowercase()
         if (query.isEmpty()) return memory.take(limit)
         return memory
-            .filter { it.name.lowercase().contains(query) && it.name.lowercase() != query }
-            .sortedBy { if (it.name.lowercase().startsWith(query)) 0 else 1 }   // stable: keeps most-used first
+            .filter { it.name.lowercase().contains(query) }
+            .sortedBy {
+                val name = it.name.lowercase()
+                when {
+                    name == query -> 0
+                    name.startsWith(query) -> 1
+                    else -> 2
+                }
+            }   // stable: keeps most-used first inside each group
             .take(limit)
     }
 

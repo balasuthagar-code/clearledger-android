@@ -100,8 +100,24 @@ class SuggestMerchantsUseCaseTest {
     }
 
     @Test
-    fun anExactMatch_isNotSuggestedAgain() {
-        assertTrue(useCase(memory, "keells").isEmpty())
+    fun anExactMatch_isStillSuggested_soItsCategoryCanBeRecalled() {
+        val result = useCase(memory, "keells")
+
+        assertEquals(listOf("Keells"), result.map { it.name })
+        assertEquals("food", result.single().categoryId)
+    }
+
+    @Test
+    fun anExactMatch_comesBeforePartialMatches() {
+        val result = useCase(
+            listOf(
+                MerchantSuggestion("Test Cafe Colombo", "food", 9),
+                MerchantSuggestion("Test Cafe", "food", 1)
+            ),
+            "test cafe"
+        )
+
+        assertEquals(listOf("Test Cafe", "Test Cafe Colombo"), result.map { it.name })
     }
 
     @Test
