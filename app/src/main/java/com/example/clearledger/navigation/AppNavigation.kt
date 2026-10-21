@@ -30,6 +30,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.ui.unit.dp
+import com.example.clearledger.navigation.RecurringRoutes
+import com.example.clearledger.navigation.recurringGraph
 @Composable
 fun AppNavigation() {
     val navController = rememberNavController()
@@ -39,6 +41,7 @@ fun AppNavigation() {
         startDestination = Routes.SPLASH
     ) {
         expenseGraph(navController)
+        recurringGraph(navController)
         composable(Routes.SPLASH) {
             val splashViewModel: SplashViewModel = hiltViewModel()
             val state =
@@ -155,6 +158,13 @@ fun AppNavigation() {
                             }
                         ) {
                             Text("All expenses")
+                        }
+                        TextButton(
+                            onClick = {
+                                navController.navigate(RecurringRoutes.LIST)
+                            }
+                        ) {
+                            Text("Recurring")
                         }
                     }
                 }
