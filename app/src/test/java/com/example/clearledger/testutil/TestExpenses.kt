@@ -17,7 +17,8 @@ fun testExpense(
     createdAtMillis: Long = 0L,
     classification: ExpenseClassification = ExpenseClassification.DISCRETIONARY,
     merchant: String = "",
-    monthKey: String = MonthKey.of(date)
+    monthKey: String = MonthKey.of(date),
+    recurringId: String? = null
 ) = Expense(
     id = id,
     amountMinor = amountMinor,
@@ -30,5 +31,6 @@ fun testExpense(
     merchant = merchant,
     date = date,
     monthKey = monthKey,
-    createdAtMillis = createdAtMillis
+    createdAtMillis = createdAtMillis,
+    recurringId = recurringId
 )

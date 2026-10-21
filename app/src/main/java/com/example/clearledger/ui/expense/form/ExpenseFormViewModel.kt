@@ -10,6 +10,7 @@ import com.example.clearledger.domain.model.DefaultCategories
 import com.example.clearledger.domain.model.Expense
 import com.example.clearledger.domain.model.ExpenseCategory
 import com.example.clearledger.domain.model.ExpenseClassification
+import com.example.clearledger.domain.model.MerchantSuggestion
 import com.example.clearledger.domain.model.PaymentMethod
 import com.example.clearledger.domain.repository.CategoryRepository
 import com.example.clearledger.domain.repository.ExpenseRepository
@@ -17,6 +18,7 @@ import com.example.clearledger.domain.usecase.ExpenseDraft
 import com.example.clearledger.domain.usecase.ExpenseFormErrors
 import com.example.clearledger.domain.usecase.SaveExpenseResult
 import com.example.clearledger.domain.usecase.SaveExpenseUseCase
+import com.example.clearledger.domain.usecase.SuggestMerchantsUseCase
 import com.example.clearledger.navigation.ExpenseRoutes
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.channels.Channel
@@ -26,6 +28,8 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
@@ -68,7 +72,8 @@ class ExpenseFormViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val expenseRepository: ExpenseRepository,
     private val categoryRepository: CategoryRepository,
-    private val saveExpense: SaveExpenseUseCase
+    private val saveExpense: SaveExpenseUseCase,
+    private val suggestMerchants: SuggestMerchantsUseCase
 ) : ViewModel() {
 
     private val expenseId: String? = savedStateHandle.get<String>(ExpenseRoutes.ARG_EXPENSE_ID)
@@ -92,6 +97,19 @@ class ExpenseFormViewModel @Inject constructor(
             .map { list -> list.sortedWith(compareByDescending<ExpenseCategory> { it.isFavourite }.thenBy { it.sortOrder }) }
             .catch { emit(emptyList()) }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** FR-EXP-08: merchants seen in the user's recent expenses, with their usual category. */
+    private val merchantMemory: StateFlow<List<MerchantSuggestion>> =
+        expenseRepository.observeRecentExpenses(MERCHANT_MEMORY_SIZE)
+            .map { suggestMerchants.buildMemory(it) }
+            .catch { emit(emptyList()) }                 // suggestions are a nicety: never an error screen
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** The chips under the amount field: most used merchants, narrowed down as the user types. */
+    val merchantSuggestions: StateFlow<List<MerchantSuggestion>> =
+        combine(merchantMemory, _state.map { it.merchant }.distinctUntilChanged()) { memory, typed ->
+            suggestMerchants(memory, typed)
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     init {
         // Safe to call repeatedly; makes sure the category chips are never empty on first use.
@@ -164,6 +182,28 @@ class ExpenseFormViewModel @Inject constructor(
 
     fun onPaymentMethodSelected(method: PaymentMethod) = _state.update { it.copy(paymentMethod = method) }
     fun onMerchantChange(text: String) = _state.update { it.copy(merchant = text) }
+
+    /**
+     * FR-EXP-08: tapping a remembered merchant fills the merchant and pre-fills its usual category -
+     * but never replaces a category the user already picked (and never touches one when editing).
+     */
+    fun onMerchantSuggestionSelected(suggestion: MerchantSuggestion) {
+        _state.update { it.copy(merchant = suggestion.name) }
+        if (_state.value.categoryId == null && suggestion.categoryId.isNotBlank()) {
+            onCategorySelected(suggestion.categoryId)
+        }
+    }
+
+    /** FR-EXP-09: star / unstar the selected category; favourites are listed first next time. */
+    fun toggleFavourite() {
+        val id = _state.value.categoryId ?: return
+        val category = categories.value.firstOrNull { it.id == id } ?: return
+        viewModelScope.launch {
+            if (categoryRepository.setFavourite(id, !category.isFavourite) is Result.Error) {
+                _state.update { it.copy(saveError = "Could not update your favourite categories. Please try again.") }
+            }
+        }
+    }
     fun onNoteChange(text: String) = _state.update { it.copy(note = text) }
     fun onDateChange(date: LocalDate) = _state.update { it.copy(date = date) }
 
@@ -197,5 +237,9 @@ class ExpenseFormViewModel @Inject constructor(
                 is SaveExpenseResult.Failed -> _state.update { it.copy(isSaving = false, saveError = result.message) }
             }
         }
+    }
+
+    private companion object {
+        const val MERCHANT_MEMORY_SIZE = 200
     }
 }

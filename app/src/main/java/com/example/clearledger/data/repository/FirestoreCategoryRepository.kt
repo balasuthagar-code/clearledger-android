@@ -15,6 +15,7 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
 
 /** All data lives under users/{uid}/..., so the security rules can say "only the owner may touch it". */
@@ -59,5 +60,26 @@ class FirestoreCategoryRepository @Inject constructor(
         } catch (e: Exception) {
             Result.Error(Exception("Could not set up your categories. Please try again.", e))
         }
+    }
+
+    /**
+     * The DTO stores the flag as "favourite" (see CategoryDto). Like the other writes, an offline phone
+     * queues it: after 2 seconds we report success and the SDK syncs later.
+     */
+    override suspend fun setFavourite(id: String, favourite: Boolean): Result<Unit> {
+        return try {
+            withTimeoutOrNull(WRITE_TIMEOUT_MS) {
+                categoriesCollection().document(id).update("favourite", favourite).await()
+            }
+            Result.Success(Unit)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Result.Error(Exception("Could not update your favourite categories. Please try again.", e))
+        }
+    }
+
+    private companion object {
+        const val WRITE_TIMEOUT_MS = 2_000L
     }
 }

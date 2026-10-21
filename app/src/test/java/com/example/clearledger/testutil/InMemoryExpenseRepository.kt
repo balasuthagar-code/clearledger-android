@@ -15,11 +15,24 @@ open class InMemoryExpenseRepository(initial: List<Expense> = emptyList()) : Exp
     val added = mutableListOf<Expense>()
     val updated = mutableListOf<Expense>()
     val deletedIds = mutableListOf<String>()
+    val upserted = mutableListOf<Expense>()
     var failWrites = false
     private var nextId = 1
 
     override fun observeExpensesForMonth(monthKey: String): Flow<List<Expense>> =
         data.map { list -> list.filter { it.monthKey == monthKey } }
+
+    override fun observeRecentExpenses(limit: Int): Flow<List<Expense>> =
+        data.map { list -> list.sortedByDescending { it.date }.take(limit) }
+
+    override suspend fun upsertExpense(expense: Expense): Result<Unit> {
+        if (failWrites) return Result.Error(Exception("Could not save the expense. Please try again."))
+        upserted += expense
+        data.update { list ->
+            if (list.any { it.id == expense.id }) list.map { if (it.id == expense.id) expense else it } else list + expense
+        }
+        return Result.Success(Unit)
+    }
 
     override suspend fun getExpense(id: String): Result<Expense?> =
         Result.Success(data.value.firstOrNull { it.id == id })

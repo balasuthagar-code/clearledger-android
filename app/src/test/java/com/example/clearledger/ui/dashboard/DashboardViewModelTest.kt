@@ -12,8 +12,13 @@ import com.example.clearledger.domain.repository.ExpenseRepository
 import com.example.clearledger.domain.repository.IncomeSummarySource
 import com.example.clearledger.domain.repository.PrimaryGoalSource
 import com.example.clearledger.domain.usecase.CalculateMonthlySummaryUseCase
+import com.example.clearledger.domain.usecase.CalculateSafeToSpendUseCase
+import com.example.clearledger.domain.usecase.GetDueRecurringUseCase
+import com.example.clearledger.domain.usecase.ObserveDueRecurringUseCase
 import com.example.clearledger.domain.usecase.ObserveMonthlySummaryUseCase
 import com.example.clearledger.testutil.InMemoryExpenseRepository
+import com.example.clearledger.testutil.InMemoryRecurringRepository
+import com.example.clearledger.testutil.testRecurring
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -23,6 +28,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -30,6 +36,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -65,6 +72,7 @@ class DashboardViewModelTest {
             seedCalls++
             return Result.Success(Unit)
         }
+        override suspend fun setFavourite(id: String, favourite: Boolean): Result<Unit> = Result.Success(Unit)
     }
 
     private class FakeGoal(private val goal: GoalSummary? = null) : PrimaryGoalSource {
@@ -79,11 +87,14 @@ class DashboardViewModelTest {
         expenses: ExpenseRepository,
         income: IncomeSummarySource = FakeIncome(),
         categories: CategoryRepository = FakeCategories(),
-        goal: PrimaryGoalSource = FakeGoal()
+        goal: PrimaryGoalSource = FakeGoal(),
+        recurring: InMemoryRecurringRepository = InMemoryRecurringRepository()
     ) = DashboardViewModel(
         ObserveMonthlySummaryUseCase(expenses, income, CalculateMonthlySummaryUseCase()),
         categories,
-        goal
+        goal,
+        ObserveDueRecurringUseCase(recurring, expenses, GetDueRecurringUseCase()),
+        CalculateSafeToSpendUseCase()
     )
 
     private fun expenseThisMonth(base: Long) = Expense(
@@ -165,6 +176,98 @@ class DashboardViewModelTest {
 
         assertEquals(goal, vm.primaryGoal.value)
         assertEquals(20, vm.primaryGoal.value!!.progressPercent)
+    }
+
+    // ---------- FR-DASH-08 / BR-10: safe to spend ----------
+
+    private fun TestScope.collectSafe(vm: DashboardViewModel) {
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.safeToSpend.collect {} }
+        advanceUntilIdle()
+    }
+
+    @Test
+    fun safeToSpend_subtractsExpenses_pendingRecurring_andGoalSaving() = runTest {
+        val goal = GoalSummary("MacBook", savedMinor = 0, targetMinor = 49_000_000, requiredMonthlyMinor = 4_083_334)
+        val vm = viewModel(
+            FakeExpenses(listOf(expenseThisMonth(500_000))),
+            FakeIncome(listOf(13_000_000L)),
+            goal = FakeGoal(goal),
+            recurring = InMemoryRecurringRepository(listOf(testRecurring("r1", baseMinor = 3_400_000)))
+        )
+        collectSafe(vm)
+
+        val safe = vm.safeToSpend.value!!
+        assertEquals(13_000_000L, safe.incomeMinor)
+        assertEquals(500_000L, safe.expensesMinor)
+        assertEquals(3_400_000L, safe.pendingCommitmentsMinor)
+        assertEquals(4_083_334L, safe.goalSavingMinor)
+        assertEquals(13_000_000L - 500_000L - 3_400_000L - 4_083_334L, safe.amountMinor)
+    }
+
+    @Test
+    fun safeToSpend_doesNotCountConfirmedOrSkippedItems() = runTest {
+        val confirmed = expenseThisMonth(3_400_000).copy(id = "paid", recurringId = "r1")
+        val vm = viewModel(
+            FakeExpenses(listOf(confirmed)),
+            FakeIncome(listOf(13_000_000L)),
+            recurring = InMemoryRecurringRepository(
+                listOf(
+                    testRecurring("r1", baseMinor = 3_400_000),                                            // confirmed
+                    testRecurring("r2", name = "Gym", baseMinor = 480_000, skippedMonthKey = MonthKey.current()) // skipped
+                )
+            )
+        )
+        collectSafe(vm)
+
+        val safe = vm.safeToSpend.value!!
+        assertEquals(0L, safe.pendingCommitmentsMinor)
+        assertEquals(13_000_000L - 3_400_000L, safe.amountMinor)   // the confirmed rent is already in the expenses
+    }
+
+    @Test
+    fun safeToSpend_withoutAGoal_hasNoGoalSaving() = runTest {
+        val vm = viewModel(FakeExpenses(listOf(expenseThisMonth(500_000))), FakeIncome(listOf(1_000_000L)))
+        collectSafe(vm)
+
+        assertEquals(0L, vm.safeToSpend.value!!.goalSavingMinor)
+    }
+
+    @Test
+    fun safeToSpend_isNegative_whenOverBudget() = runTest {
+        val vm = viewModel(FakeExpenses(listOf(expenseThisMonth(900_000))), FakeIncome(listOf(500_000L)))
+        collectSafe(vm)
+
+        val safe = vm.safeToSpend.value!!
+        assertTrue(safe.isOverBudget)
+        assertEquals(-400_000L, safe.amountMinor)
+    }
+
+    @Test
+    fun safeToSpend_isHiddenForOtherMonths_andForAnEmptyMonth() = runTest {
+        val vm = viewModel(FakeExpenses(listOf(expenseThisMonth(500_000))), FakeIncome(listOf(1_000_000L)))
+        collectSafe(vm)
+        assertTrue(vm.safeToSpend.value != null)
+
+        vm.showPreviousMonth()
+        advanceUntilIdle()
+        assertNull(vm.safeToSpend.value)
+
+        val emptyVm = viewModel(FakeExpenses(), FakeIncome())
+        collectSafe(emptyVm)
+        assertNull(emptyVm.safeToSpend.value)
+    }
+
+    @Test
+    fun safeToSpend_isHidden_whenRecurringItemsCannotBeLoaded() = runTest {
+        val failingRecurring = object : InMemoryRecurringRepository() {
+            override fun observeRecurring(): Flow<List<com.example.clearledger.domain.model.RecurringItem>> =
+                flow { throw RuntimeException("boom") }
+        }
+        val vm = viewModel(FakeExpenses(listOf(expenseThisMonth(500_000))), FakeIncome(listOf(1_000_000L)), recurring = failingRecurring)
+        collectSafe(vm)
+
+        assertNull(vm.safeToSpend.value)                     // never show an optimistic number
+        assertTrue(vm.uiState.value is UiState.Success)      // the rest of the dashboard still works
     }
 
     @Test

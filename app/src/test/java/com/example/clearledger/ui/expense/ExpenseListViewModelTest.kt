@@ -51,6 +51,7 @@ class ExpenseListViewModelTest {
             )
         )
         override suspend fun seedDefaultCategoriesIfEmpty(): Result<Unit> = Result.Success(Unit)
+        override suspend fun setFavourite(id: String, favourite: Boolean): Result<Unit> = Result.Success(Unit)
     }
 
     private fun thisMonth(id: String, base: Long, category: String = "food") = testExpense(

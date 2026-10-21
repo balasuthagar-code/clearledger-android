@@ -40,6 +40,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.clearledger.core.common.Currencies
 import com.example.clearledger.domain.model.ExpenseCategory
 import com.example.clearledger.domain.model.ExpenseClassification
+import com.example.clearledger.domain.model.MerchantSuggestion
 import com.example.clearledger.domain.model.PaymentMethod
 import java.time.Instant
 import java.time.LocalDate
@@ -58,6 +59,8 @@ data class ExpenseFormActions(
     val onRateChange: (String) -> Unit,
     val onPaymentMethodSelected: (PaymentMethod) -> Unit,
     val onMerchantChange: (String) -> Unit,
+    val onMerchantSuggestionSelected: (MerchantSuggestion) -> Unit,
+    val onToggleFavourite: () -> Unit,
     val onNoteChange: (String) -> Unit,
     val onDateChange: (LocalDate) -> Unit,
     val onSave: () -> Unit,
@@ -73,6 +76,7 @@ fun ExpenseFormRoute(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val categories by viewModel.categories.collectAsStateWithLifecycle()
+    val merchantSuggestions by viewModel.merchantSuggestions.collectAsStateWithLifecycle()
 
     LaunchedEffect(Unit) {
         viewModel.events.collect { event ->
@@ -83,6 +87,7 @@ fun ExpenseFormRoute(
     ExpenseFormScreen(
         state = state,
         categories = categories,
+        merchantSuggestions = merchantSuggestions,
         actions = ExpenseFormActions(
             onAmountChange = viewModel::onAmountChange,
             onCategorySelected = viewModel::onCategorySelected,
@@ -91,6 +96,8 @@ fun ExpenseFormRoute(
             onRateChange = viewModel::onRateChange,
             onPaymentMethodSelected = viewModel::onPaymentMethodSelected,
             onMerchantChange = viewModel::onMerchantChange,
+            onMerchantSuggestionSelected = viewModel::onMerchantSuggestionSelected,
+            onToggleFavourite = viewModel::toggleFavourite,
             onNoteChange = viewModel::onNoteChange,
             onDateChange = viewModel::onDateChange,
             onSave = viewModel::save,
@@ -104,6 +111,7 @@ fun ExpenseFormRoute(
 fun ExpenseFormScreen(
     state: ExpenseFormState,
     categories: List<ExpenseCategory>,
+    merchantSuggestions: List<MerchantSuggestion>,
     actions: ExpenseFormActions,
     modifier: Modifier = Modifier
 ) {
@@ -151,6 +159,23 @@ fun ExpenseFormScreen(
                     modifier = Modifier.fillMaxWidth()
                 )
 
+                // ---- FR-EXP-08: remembered merchants (tap one to fill merchant + usual category) ----
+                if (merchantSuggestions.isNotEmpty()) {
+                    Text("Merchants", style = MaterialTheme.typography.titleSmall)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        merchantSuggestions.forEach { suggestion ->
+                            FilterChip(
+                                selected = state.merchant.trim().equals(suggestion.name, ignoreCase = true),
+                                onClick = { actions.onMerchantSuggestionSelected(suggestion) },
+                                label = { Text(suggestion.name) }
+                            )
+                        }
+                    }
+                }
+                if (state.merchant.isNotBlank()) {
+                    Text("Merchant: ${state.merchant}", style = MaterialTheme.typography.bodySmall)
+                }
+
                 // ---- step 2: category ----
                 Text("Category", style = MaterialTheme.typography.titleSmall)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -158,7 +183,16 @@ fun ExpenseFormScreen(
                         FilterChip(
                             selected = state.categoryId == category.id,
                             onClick = { actions.onCategorySelected(category.id) },
-                            label = { Text(category.name) }
+                            label = { Text(if (category.isFavourite) "★ ${category.name}" else category.name) }
+                        )
+                    }
+                }
+                // FR-EXP-09: star the selected category so it is listed first next time.
+                categories.firstOrNull { it.id == state.categoryId }?.let { selected ->
+                    TextButton(onClick = actions.onToggleFavourite) {
+                        Text(
+                            if (selected.isFavourite) "★ Remove ${selected.name} from favourites"
+                            else "☆ Make ${selected.name} a favourite"
                         )
                     }
                 }

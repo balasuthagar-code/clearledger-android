@@ -5,7 +5,9 @@ import com.example.clearledger.core.common.Result
 import com.example.clearledger.domain.model.ExpenseCategory
 import com.example.clearledger.domain.model.ExpenseClassification
 import com.example.clearledger.domain.repository.CategoryRepository
+import com.example.clearledger.domain.model.MerchantSuggestion
 import com.example.clearledger.domain.usecase.SaveExpenseUseCase
+import com.example.clearledger.domain.usecase.SuggestMerchantsUseCase
 import com.example.clearledger.domain.usecase.ValidateExpenseInputUseCase
 import com.example.clearledger.navigation.ExpenseRoutes
 import com.example.clearledger.testutil.InMemoryExpenseRepository
@@ -55,6 +57,13 @@ class ExpenseFormViewModelTest {
             )
         )
         override suspend fun seedDefaultCategoriesIfEmpty(): Result<Unit> { seedCalls++; return Result.Success(Unit) }
+        val favouriteCalls = mutableListOf<Pair<String, Boolean>>()
+        var failFavourite = false
+        override suspend fun setFavourite(id: String, favourite: Boolean): Result<Unit> {
+            if (failFavourite) return Result.Error(Exception("nope"))
+            favouriteCalls += id to favourite
+            return Result.Success(Unit)
+        }
     }
 
     private fun viewModel(
@@ -63,7 +72,11 @@ class ExpenseFormViewModelTest {
         categories: FakeCategories = FakeCategories()
     ): ExpenseFormViewModel {
         val handle = SavedStateHandle(if (expenseId == null) emptyMap() else mapOf(ExpenseRoutes.ARG_EXPENSE_ID to expenseId))
-        return ExpenseFormViewModel(handle, repo, categories, SaveExpenseUseCase(repo, ValidateExpenseInputUseCase()))
+        return ExpenseFormViewModel(
+            handle, repo, categories,
+            SaveExpenseUseCase(repo, ValidateExpenseInputUseCase()),
+            SuggestMerchantsUseCase()
+        )
     }
 
     private fun TestScope.collectCategories(vm: ExpenseFormViewModel) {
@@ -228,5 +241,156 @@ class ExpenseFormViewModelTest {
         vm.save()                                  // must be ignored
         advanceUntilIdle()
         assertTrue(vm.state.value.loadError != null)
+    }
+
+    // ---------- FR-EXP-08: merchant memory ----------
+
+    private fun TestScope.collectSuggestions(vm: ExpenseFormViewModel) {
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.merchantSuggestions.collect {} }
+        advanceUntilIdle()
+    }
+
+    private fun pastExpenses() = InMemoryExpenseRepository(
+        listOf(
+            testExpense(id = "1", merchant = "PickMe", categoryId = "transport"),
+            testExpense(id = "2", merchant = "pickme", categoryId = "transport"),
+            testExpense(id = "3", merchant = "Keells", categoryId = "food"),
+            testExpense(id = "4", merchant = "", categoryId = "food")
+        )
+    )
+
+    @Test
+    fun merchantSuggestions_comeFromRecentExpenses_mostUsedFirst() = runTest {
+        val vm = viewModel(pastExpenses())
+        collectSuggestions(vm)
+
+        assertEquals(listOf("pickme", "keells"), vm.merchantSuggestions.value.map { it.name.lowercase() })
+        assertEquals(2, vm.merchantSuggestions.value.first().useCount)
+    }
+
+    @Test
+    fun typingAMerchant_narrowsTheSuggestions() = runTest {
+        val vm = viewModel(pastExpenses())
+        collectSuggestions(vm)
+
+        vm.onMerchantChange("kee")
+        advanceUntilIdle()
+
+        assertEquals(listOf("Keells"), vm.merchantSuggestions.value.map { it.name })
+    }
+
+    @Test
+    fun selectingASuggestion_fillsMerchant_andPrefillsTheUsualCategory() = runTest {
+        val vm = viewModel(pastExpenses())
+        collectCategories(vm)
+        collectSuggestions(vm)
+
+        vm.onMerchantSuggestionSelected(MerchantSuggestion("PickMe", "transport", 2))
+
+        assertEquals("PickMe", vm.state.value.merchant)
+        assertEquals("transport", vm.state.value.categoryId)
+        assertEquals(ExpenseClassification.DISCRETIONARY, vm.state.value.classification)
+    }
+
+    @Test
+    fun selectingASuggestion_prefillsTheCategorysDefaultClassification() = runTest {
+        val vm = viewModel(pastExpenses())
+        collectCategories(vm)
+
+        vm.onMerchantSuggestionSelected(MerchantSuggestion("Landlord", "rent", 3))
+
+        assertEquals(ExpenseClassification.COMMITTED, vm.state.value.classification)
+    }
+
+    @Test
+    fun selectingASuggestion_neverReplacesACategoryTheUserAlreadyPicked() = runTest {
+        val vm = viewModel(pastExpenses())
+        collectCategories(vm)
+        vm.onCategorySelected("food")
+
+        vm.onMerchantSuggestionSelected(MerchantSuggestion("PickMe", "transport", 2))
+
+        assertEquals("PickMe", vm.state.value.merchant)
+        assertEquals("food", vm.state.value.categoryId)
+    }
+
+    @Test
+    fun selectingASuggestionWithoutACategory_onlyFillsTheMerchant() = runTest {
+        val vm = viewModel(pastExpenses())
+        collectCategories(vm)
+
+        vm.onMerchantSuggestionSelected(MerchantSuggestion("Someone", "", 1))
+
+        assertEquals("Someone", vm.state.value.merchant)
+        assertNull(vm.state.value.categoryId)
+    }
+
+    @Test
+    fun savingWithASuggestedMerchant_storesTheMerchantAndCategory() = runTest {
+        val repo = pastExpenses()
+        val vm = viewModel(repo)
+        collectCategories(vm)
+
+        vm.onAmountChange("250")
+        vm.onMerchantSuggestionSelected(MerchantSuggestion("PickMe", "transport", 2))
+        vm.save()
+        advanceUntilIdle()
+
+        val saved = repo.added.single()
+        assertEquals("PickMe", saved.merchant)
+        assertEquals("transport", saved.categoryId)
+    }
+
+    // ---------- FR-EXP-09: favourite categories ----------
+
+    @Test
+    fun toggleFavourite_starsTheSelectedCategory() = runTest {
+        val categories = FakeCategories()
+        val vm = viewModel(InMemoryExpenseRepository(), categories = categories)
+        collectCategories(vm)
+
+        vm.onCategorySelected("food")           // not a favourite yet
+        vm.toggleFavourite()
+        advanceUntilIdle()
+
+        assertEquals(listOf("food" to true), categories.favouriteCalls)
+    }
+
+    @Test
+    fun toggleFavourite_unstarsAFavouriteCategory() = runTest {
+        val categories = FakeCategories()
+        val vm = viewModel(InMemoryExpenseRepository(), categories = categories)
+        collectCategories(vm)
+
+        vm.onCategorySelected("transport")      // already a favourite in the fake
+        vm.toggleFavourite()
+        advanceUntilIdle()
+
+        assertEquals(listOf("transport" to false), categories.favouriteCalls)
+    }
+
+    @Test
+    fun toggleFavourite_withoutASelectedCategory_doesNothing() = runTest {
+        val categories = FakeCategories()
+        val vm = viewModel(InMemoryExpenseRepository(), categories = categories)
+        collectCategories(vm)
+
+        vm.toggleFavourite()
+        advanceUntilIdle()
+
+        assertTrue(categories.favouriteCalls.isEmpty())
+    }
+
+    @Test
+    fun toggleFavourite_failure_showsAMessage() = runTest {
+        val categories = FakeCategories().apply { failFavourite = true }
+        val vm = viewModel(InMemoryExpenseRepository(), categories = categories)
+        collectCategories(vm)
+        vm.onCategorySelected("food")
+
+        vm.toggleFavourite()
+        advanceUntilIdle()
+
+        assertEquals("Could not update your favourite categories. Please try again.", vm.state.value.saveError)
     }
 }

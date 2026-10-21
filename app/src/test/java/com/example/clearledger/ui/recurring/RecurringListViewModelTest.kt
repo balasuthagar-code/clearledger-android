@@ -6,7 +6,12 @@ import com.example.clearledger.domain.model.ExpenseCategory
 import com.example.clearledger.domain.model.ExpenseClassification
 import com.example.clearledger.domain.model.RecurringItem
 import com.example.clearledger.domain.repository.CategoryRepository
+import com.example.clearledger.domain.model.DueStatus
 import com.example.clearledger.domain.usecase.CalculatePlannedCommitmentsUseCase
+import com.example.clearledger.domain.usecase.ConfirmRecurringUseCase
+import com.example.clearledger.domain.usecase.GetDueRecurringUseCase
+import com.example.clearledger.domain.usecase.ObserveDueRecurringUseCase
+import com.example.clearledger.testutil.InMemoryExpenseRepository
 import com.example.clearledger.testutil.InMemoryRecurringRepository
 import com.example.clearledger.testutil.testRecurring
 import com.example.clearledger.ui.recurring.list.RecurringListViewModel
@@ -45,10 +50,21 @@ class RecurringListViewModelTest {
         override fun observeCategories(): Flow<List<ExpenseCategory>> =
             flowOf(listOf(ExpenseCategory("rent", "Rent", ExpenseClassification.COMMITTED)))
         override suspend fun seedDefaultCategoriesIfEmpty(): Result<Unit> = Result.Success(Unit)
+        override suspend fun setFavourite(id: String, favourite: Boolean): Result<Unit> = Result.Success(Unit)
     }
 
-    private fun viewModel(repo: InMemoryRecurringRepository) =
-        RecurringListViewModel(repo, FakeCategories(), CalculatePlannedCommitmentsUseCase())
+    private fun viewModel(
+        repo: InMemoryRecurringRepository,
+        expenses: InMemoryExpenseRepository = InMemoryExpenseRepository()
+    ) = RecurringListViewModel(
+        repo,
+        FakeCategories(),
+        CalculatePlannedCommitmentsUseCase(),
+        ObserveDueRecurringUseCase(repo, expenses, GetDueRecurringUseCase()),
+        ConfirmRecurringUseCase(expenses, FakeCategories())
+    )
+
+    private fun due(vm: RecurringListViewModel) = (vm.uiState.value as UiState.Success).data.due
 
     private fun TestScope.collect(vm: RecurringListViewModel) {
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.uiState.collect {} }
@@ -133,6 +149,118 @@ class RecurringListViewModelTest {
 
         assertEquals("Could not delete the item. Please try again.", vm.message.value)
         assertEquals(1, (vm.uiState.value as UiState.Success).data.items.size)
+    }
+
+    // ---------- FR-REC-03 / FR-REC-04: due tracking and confirmation ----------
+
+    @Test
+    fun monthlyItems_areListedAsPendingDue() = runTest {
+        val vm = viewModel(InMemoryRecurringRepository(listOf(testRecurring("a"), testRecurring("b", name = "Gym", dueDay = 5))))
+        collect(vm)
+
+        val due = due(vm)
+        assertEquals(listOf("a", "b"), due.map { it.item.id })
+        assertTrue(due.all { it.status == DueStatus.PENDING })
+    }
+
+    @Test
+    fun confirm_createsOneLinkedExpense_andMarksTheItemConfirmed() = runTest {
+        val expenses = InMemoryExpenseRepository()
+        val vm = viewModel(InMemoryRecurringRepository(listOf(testRecurring("a", baseMinor = 3_400_000))), expenses)
+        collect(vm)
+
+        vm.confirm("a")
+        advanceUntilIdle()
+
+        val expense = expenses.upserted.single()
+        assertEquals("a", expense.recurringId)
+        assertEquals(3_400_000L, expense.baseAmountMinor)
+        assertEquals(DueStatus.CONFIRMED, due(vm).single().status)
+        assertEquals("Rent added to your expenses", vm.message.value)
+    }
+
+    @Test
+    fun confirmingTwice_neverCreatesADuplicate() = runTest {
+        val expenses = InMemoryExpenseRepository()
+        val vm = viewModel(InMemoryRecurringRepository(listOf(testRecurring("a"))), expenses)
+        collect(vm)
+
+        vm.confirm("a")
+        vm.confirm("a")
+        advanceUntilIdle()
+
+        assertEquals(1, expenses.data.value.size)
+    }
+
+    @Test
+    fun confirmFailure_showsMessage_andTheItemStaysPending() = runTest {
+        val expenses = InMemoryExpenseRepository()
+        expenses.failWrites = true
+        val vm = viewModel(InMemoryRecurringRepository(listOf(testRecurring("a"))), expenses)
+        collect(vm)
+
+        vm.confirm("a")
+        advanceUntilIdle()
+
+        assertEquals("Could not save the expense. Please try again.", vm.message.value)
+        assertEquals(DueStatus.PENDING, due(vm).single().status)
+    }
+
+    @Test
+    fun skip_marksTheItemSkipped_recordsNoExpense_andUndoRestoresPending() = runTest {
+        val expenses = InMemoryExpenseRepository()
+        val vm = viewModel(InMemoryRecurringRepository(listOf(testRecurring("a"))), expenses)
+        collect(vm)
+
+        vm.skip("a")
+        advanceUntilIdle()
+        assertEquals(DueStatus.SKIPPED, due(vm).single().status)
+        assertTrue(expenses.data.value.isEmpty())
+
+        vm.undoSkip("a")
+        advanceUntilIdle()
+        assertEquals(DueStatus.PENDING, due(vm).single().status)
+    }
+
+    @Test
+    fun skipFailure_showsMessage() = runTest {
+        val repo = InMemoryRecurringRepository(listOf(testRecurring("a")))
+        val vm = viewModel(repo)
+        collect(vm)
+        repo.failWrites = true
+
+        vm.skip("a")
+        advanceUntilIdle()
+
+        assertEquals("Could not change the item. Please try again.", vm.message.value)
+    }
+
+    @Test
+    fun deletingTheLinkedExpense_makesTheItemPendingAgain() = runTest {
+        val expenses = InMemoryExpenseRepository()
+        val vm = viewModel(InMemoryRecurringRepository(listOf(testRecurring("a"))), expenses)
+        collect(vm)
+        vm.confirm("a")
+        advanceUntilIdle()
+        assertEquals(DueStatus.CONFIRMED, due(vm).single().status)
+
+        expenses.deleteExpense(due(vm).single().expenseId!!)
+        advanceUntilIdle()
+
+        assertEquals(DueStatus.PENDING, due(vm).single().status)
+    }
+
+    @Test
+    fun confirmingAnUnknownItem_doesNothing() = runTest {
+        val expenses = InMemoryExpenseRepository()
+        val vm = viewModel(InMemoryRecurringRepository(listOf(testRecurring("a"))), expenses)
+        collect(vm)
+
+        vm.confirm("missing")
+        advanceUntilIdle()
+
+        assertTrue(expenses.upserted.isEmpty())
+        assertNull(vm.message.value)
     }
 
     @Test

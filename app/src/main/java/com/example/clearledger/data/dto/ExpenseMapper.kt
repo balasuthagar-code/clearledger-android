@@ -25,7 +25,8 @@ import java.util.Date
  *   users/{uid}/expenses/{id}:
  *     amountMinor, currency, exchangeRate (String), baseAmountMinor, categoryId,
  *     classification ("COMMITTED"/"DISCRETIONARY"), paymentMethod, merchant, note,
- *     date (Timestamp), monthKey ("YYYY-MM"), createdAt, updatedAt
+ *     date (Timestamp), monthKey ("YYYY-MM"), createdAt, updatedAt,
+ *     recurringId (only when created by confirming a recurring item)
  *
  * The repository converts Firestore Timestamp -> java.util.Date before calling [fromMap].
  */
@@ -64,7 +65,8 @@ object ExpenseMapper {
             note = (data["note"] as? String).orEmpty(),
             date = date,
             monthKey = monthKey,
-            createdAtMillis = parseMillis(data["createdAt"]) ?: 0L
+            createdAtMillis = parseMillis(data["createdAt"]) ?: 0L,
+            recurringId = (data["recurringId"] as? String)?.takeIf { it.isNotBlank() }
         )
     }
 
@@ -88,6 +90,7 @@ object ExpenseMapper {
             "updatedAt" to now
         )
         if (isNew) map["createdAt"] = now
+        expense.recurringId?.let { map["recurringId"] = it }
         return map
     }
 

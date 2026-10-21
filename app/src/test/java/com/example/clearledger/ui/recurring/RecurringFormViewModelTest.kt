@@ -48,6 +48,7 @@ class RecurringFormViewModelTest {
         override fun observeCategories(): Flow<List<ExpenseCategory>> =
             flowOf(listOf(ExpenseCategory("rent", "Rent", ExpenseClassification.COMMITTED)))
         override suspend fun seedDefaultCategoriesIfEmpty(): Result<Unit> = Result.Success(Unit)
+        override suspend fun setFavourite(id: String, favourite: Boolean): Result<Unit> = Result.Success(Unit)
     }
 
     private fun viewModel(repo: InMemoryRecurringRepository, id: String? = null): RecurringFormViewModel {

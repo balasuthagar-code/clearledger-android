@@ -22,5 +22,6 @@ data class Expense(
     val note: String = "",
     val date: LocalDate,
     val monthKey: String,             // "YYYY-MM"
-    val createdAtMillis: Long = 0L    // used only to order expenses of the same day (newest first)
+    val createdAtMillis: Long = 0L,   // used only to order expenses of the same day (newest first)
+    val recurringId: String? = null   // set when the expense was created by confirming a recurring item (FR-REC-04)
 )

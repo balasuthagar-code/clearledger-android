@@ -34,13 +34,20 @@ open class InMemoryRecurringRepository(initial: List<RecurringItem> = emptyList(
     override suspend fun updateRecurring(item: RecurringItem): Result<Unit> {
         if (failWrites) return Result.Error(Exception("Could not update the item. Please try again."))
         updated += item
-        data.update { list -> list.map { if (it.id == item.id) item else it } }
+        // Like the real repository, editing the form never changes the skipped month.
+        data.update { list -> list.map { if (it.id == item.id) item.copy(skippedMonthKey = it.skippedMonthKey) else it } }
         return Result.Success(Unit)
     }
 
     override suspend fun setActive(id: String, active: Boolean): Result<Unit> {
         if (failWrites) return Result.Error(Exception("Could not change the item. Please try again."))
         data.update { list -> list.map { if (it.id == id) it.copy(isActive = active) else it } }
+        return Result.Success(Unit)
+    }
+
+    override suspend fun setSkippedMonth(id: String, monthKey: String?): Result<Unit> {
+        if (failWrites) return Result.Error(Exception("Could not change the item. Please try again."))
+        data.update { list -> list.map { if (it.id == id) it.copy(skippedMonthKey = monthKey) else it } }
         return Result.Success(Unit)
     }
 
@@ -63,9 +70,11 @@ fun testRecurring(
     dueDay: Int = 1,
     dueMonth: Int = 1,
     currency: String = "LKR",
-    amountMinor: Long = baseMinor
+    amountMinor: Long = baseMinor,
+    skippedMonthKey: String? = null
 ) = RecurringItem(
     id = id, name = name, amountMinor = amountMinor, currency = currency,
     exchangeRate = if (currency == "LKR") "1" else "300", baseAmountMinor = baseMinor,
-    categoryId = categoryId, frequency = frequency, dueDay = dueDay, dueMonth = dueMonth, isActive = isActive
+    categoryId = categoryId, frequency = frequency, dueDay = dueDay, dueMonth = dueMonth, isActive = isActive,
+    skippedMonthKey = skippedMonthKey
 )
