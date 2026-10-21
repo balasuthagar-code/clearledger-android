@@ -1,5 +1,6 @@
 package com.example.clearledger.ui.expense.form
 
+import android.util.Log
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -31,6 +32,7 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -101,14 +103,24 @@ class ExpenseFormViewModel @Inject constructor(
     /** FR-EXP-08: merchants seen in the user's recent expenses, with their usual category. */
     private val merchantMemory: StateFlow<List<MerchantSuggestion>> =
         expenseRepository.observeRecentExpenses(MERCHANT_MEMORY_SIZE)
+            .onEach { raw ->
+                Log.d(TAG, "RAW expenses (${raw.size}): " +
+                        raw.joinToString { "[merchant='${it.merchant}' note='${it.note}' recurringId=${it.recurringId}]" })
+            }
             .map { suggestMerchants.buildMemory(it) }
+            .onEach { memory ->
+                Log.d(TAG, "MEMORY (${memory.size}): " +
+                        memory.joinToString { "'${it.name}' cat='${it.categoryId}' x${it.useCount}" })
+            }
             .catch { emit(emptyList()) }                 // suggestions are a nicety: never an error screen
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /** The chips under the amount field: most used merchants, narrowed down as the user types. */
     val merchantSuggestions: StateFlow<List<MerchantSuggestion>> =
         combine(merchantMemory, _state.map { it.merchant }.distinctUntilChanged()) { memory, typed ->
-            suggestMerchants(memory, typed)
+            suggestMerchants(memory, typed).also { result ->
+                Log.d(TAG, "TYPED='$typed' -> chips=${result.map { it.name }}")
+            }
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     init {
@@ -188,10 +200,13 @@ class ExpenseFormViewModel @Inject constructor(
      * but never replaces a category the user already picked (and never touches one when editing).
      */
     fun onMerchantSuggestionSelected(suggestion: MerchantSuggestion) {
+        Log.d(TAG, "SELECTED '${suggestion.name}' cat='${suggestion.categoryId}' " +
+                "| before: merchant='${_state.value.merchant}' categoryId=${_state.value.categoryId}")
         _state.update { it.copy(merchant = suggestion.name) }
         if (_state.value.categoryId == null && suggestion.categoryId.isNotBlank()) {
             onCategorySelected(suggestion.categoryId)
         }
+        Log.d(TAG, "AFTER: merchant='${_state.value.merchant}' categoryId=${_state.value.categoryId}")
     }
 
     /** FR-EXP-09: star / unstar the selected category; favourites are listed first next time. */
@@ -241,5 +256,6 @@ class ExpenseFormViewModel @Inject constructor(
 
     private companion object {
         const val MERCHANT_MEMORY_SIZE = 200
+        const val TAG = "MerchantDebug"
     }
 }
