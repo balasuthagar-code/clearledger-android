@@ -8,6 +8,7 @@ import com.google.android.gms.tasks.Task
 import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.CollectionReference
+import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.FirebaseFirestoreException
 import com.google.firebase.firestore.Source
@@ -85,6 +86,15 @@ class FirestoreRecurringRepository @Inject constructor(
         "Could not delete the item. Please try again."
     ) {
         collection().document(id).delete().awaitOrQueue()
+    }
+
+    /** null removes the field (undo skip). Every other field is left untouched. */
+    override suspend fun setSkippedMonth(id: String, monthKey: String?): Result<Unit> = safeCall(
+        "Could not change the item. Please try again."
+    ) {
+        collection().document(id)
+            .update(mapOf("skippedMonthKey" to (monthKey ?: FieldValue.delete()), "updatedAt" to Date()))
+            .awaitOrQueue()
     }
 
     // ---- helpers ----

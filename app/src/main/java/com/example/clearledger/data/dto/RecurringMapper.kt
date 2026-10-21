@@ -12,10 +12,13 @@ import java.util.Date
  *
  *   users/{uid}/recurring/{id}:
  *     name, amountMinor, currency, exchangeRate (String), baseAmountMinor, categoryId,
- *     frequency ("WEEKLY"/"MONTHLY"/"YEARLY"), dueDay, dueMonth, isActive, createdAt, updatedAt
+ *     frequency ("WEEKLY"/"MONTHLY"/"YEARLY"), dueDay, dueMonth, isActive, createdAt, updatedAt,
+ *     skippedMonthKey (only while a month is skipped)
  *
- * The SRS also lists lastConfirmedMonthKey / confirmationStatus; they belong to the OPTIONAL
- * confirmation workflow and are not written until that workflow exists.
+ * Confirmation state is NOT stored here: an item is Confirmed when a linked expense exists
+ * (expenses.recurringId), which can never disagree with the real expense list. Only "skipped" needs
+ * storing. toMap() deliberately never writes skippedMonthKey, so editing an item in the form cannot
+ * reset a skip; the repository changes it through setSkippedMonth().
  */
 object RecurringMapper {
 
@@ -44,7 +47,8 @@ object RecurringMapper {
             frequency = parseFrequency(data["frequency"]),
             dueDay = (data["dueDay"] as? Number)?.toInt() ?: 1,
             dueMonth = (data["dueMonth"] as? Number)?.toInt() ?: 1,
-            isActive = data["isActive"] as? Boolean ?: true
+            isActive = data["isActive"] as? Boolean ?: true,
+            skippedMonthKey = (data["skippedMonthKey"] as? String)?.takeIf { it.isNotBlank() }
         )
     }
 

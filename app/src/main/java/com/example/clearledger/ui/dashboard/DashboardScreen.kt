@@ -33,6 +33,7 @@ import com.example.clearledger.core.common.UiState
 import com.example.clearledger.domain.model.CategoryTotal
 import com.example.clearledger.domain.model.GoalSummary
 import com.example.clearledger.domain.model.MonthlySummary
+import com.example.clearledger.domain.model.SafeToSpend
 import com.example.clearledger.ui.expense.list.monthLabel
 
 /** Connects the ViewModel to the screen. Contains NO business logic. */
@@ -44,6 +45,7 @@ modifier: Modifier = Modifier,
     val month by viewModel.selectedMonth.collectAsStateWithLifecycle()
     val categoryNames by viewModel.categoryNames.collectAsStateWithLifecycle()
     val goal by viewModel.primaryGoal.collectAsStateWithLifecycle()
+    val safeToSpend by viewModel.safeToSpend.collectAsStateWithLifecycle()
 
     DashboardScreen(
         modifier = modifier,
@@ -51,6 +53,7 @@ modifier: Modifier = Modifier,
         state = state,
         categoryNames = categoryNames,
         primaryGoal = goal,
+        safeToSpend = safeToSpend,
         onPreviousMonth = viewModel::showPreviousMonth,
         onNextMonth = viewModel::showNextMonth,
         onRetry = viewModel::retry
@@ -68,6 +71,7 @@ fun DashboardScreen(
     state: UiState<MonthlySummary>,
     categoryNames: Map<String, String>,
     primaryGoal: GoalSummary?,
+    safeToSpend: SafeToSpend?,
     onPreviousMonth: () -> Unit,
     onNextMonth: () -> Unit,
     onRetry: () -> Unit,
@@ -104,7 +108,7 @@ fun DashboardScreen(
                         )
                     }
                 } else {
-                    SummaryContent(state.data, categoryNames, primaryGoal)
+                    SummaryContent(state.data, categoryNames, primaryGoal, safeToSpend)
                 }
         }
     }
@@ -119,7 +123,8 @@ private fun CenteredBox(content: @Composable () -> Unit) {
 private fun SummaryContent(
     summary: MonthlySummary,
     categoryNames: Map<String, String>,
-    primaryGoal: GoalSummary?
+    primaryGoal: GoalSummary?,
+    safeToSpend: SafeToSpend?
 ) {
     Column(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
@@ -138,12 +143,41 @@ private fun SummaryContent(
             }
         }
 
+        safeToSpend?.let { SafeToSpendCard(it) }
         IncomeVsExpensesCard(summary)
         CommittedVsDiscretionaryCard(summary)
         CategoryBreakdownCard(summary, categoryNames)
         GoalCard(primaryGoal)
     }
 }
+// ---------- FR-DASH-08: safe to spend ----------
+
+@Composable
+private fun SafeToSpendCard(safe: SafeToSpend) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("Safe to spend this month", style = MaterialTheme.typography.titleMedium)
+            Text(
+                formatMinorUnits(safe.amountMinor),
+                style = MaterialTheme.typography.headlineMedium,
+                color = if (safe.isOverBudget) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
+            )
+            if (safe.isOverBudget) {
+                Text("You are over budget for this month.", style = MaterialTheme.typography.labelLarge)
+            }
+            AmountRow("Recorded income", safe.incomeMinor)
+            AmountRow("Recorded expenses", -safe.expensesMinor)
+            AmountRow("Recurring still pending", -safe.pendingCommitmentsMinor)
+            AmountRow("Goal saving needed", -safe.goalSavingMinor)
+            Text(
+                "An estimate from recorded data. Pending recurring items are due this month and not yet " +
+                    "confirmed or skipped.",
+                style = MaterialTheme.typography.bodySmall
+            )
+        }
+    }
+}
+
 // ---------- FR-DASH-03: income vs expenses ----------
 
 @Composable

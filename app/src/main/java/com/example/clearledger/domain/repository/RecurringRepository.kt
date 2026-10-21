@@ -20,4 +20,7 @@ interface RecurringRepository {
     suspend fun setActive(id: String, active: Boolean): Result<Unit>
 
     suspend fun deleteRecurring(id: String): Result<Unit>
+
+    /** FR-REC-03: skip this item for [monthKey] ("YYYY-MM"); null undoes the skip. */
+    suspend fun setSkippedMonth(id: String, monthKey: String?): Result<Unit>
 }

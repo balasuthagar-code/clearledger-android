@@ -52,6 +52,14 @@ class FakeExpenseRepository @Inject constructor() : ExpenseRepository {
         return Result.Success(Unit)
     }
 
+    override fun observeRecentExpenses(limit: Int): Flow<List<Expense>> =
+        data.map { list -> list.sortedByDescending { it.date }.take(limit) }
+
+    override suspend fun upsertExpense(expense: Expense): Result<Unit> {
+        data.update { list -> if (list.any { it.id == expense.id }) list.map { if (it.id == expense.id) expense else it } else list + expense }
+        return Result.Success(Unit)
+    }
+
     override suspend fun deleteExpense(id: String): Result<Unit> {
         data.update { list -> list.filterNot { it.id == id } }
         return Result.Success(Unit)

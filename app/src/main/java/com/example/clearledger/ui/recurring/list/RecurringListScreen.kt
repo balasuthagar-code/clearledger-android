@@ -39,11 +39,15 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.clearledger.core.common.Currencies
 import com.example.clearledger.core.common.UiState
+import com.example.clearledger.domain.model.DueRecurring
+import com.example.clearledger.domain.model.DueStatus
 import com.example.clearledger.domain.model.RecurringFrequency
 import com.example.clearledger.domain.model.RecurringItem
 import com.example.clearledger.ui.dashboard.formatMinorUnits
 import java.time.DayOfWeek
+import java.time.LocalDate
 import java.time.Month
+import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.Locale
 
@@ -66,6 +70,10 @@ fun RecurringListRoute(
         onRetry = viewModel::retry,
         onAddItem = onAddItem,
         onEditItem = onEditItem,
+        today = viewModel.today,
+        onConfirm = viewModel::confirm,
+        onSkip = viewModel::skip,
+        onUndoSkip = viewModel::undoSkip,
         onSetActive = viewModel::setActive,
         onDeleteItem = viewModel::deleteItem,
         onMessageShown = viewModel::messageShown,
@@ -79,9 +87,13 @@ fun RecurringListScreen(
     state: UiState<RecurringListContent>,
     categoryNames: Map<String, String>,
     message: String?,
+    today: LocalDate,
     onRetry: () -> Unit,
     onAddItem: () -> Unit,
     onEditItem: (String) -> Unit,
+    onConfirm: (String) -> Unit,
+    onSkip: (String) -> Unit,
+    onUndoSkip: (String) -> Unit,
     onSetActive: (String, Boolean) -> Unit,
     onDeleteItem: (String) -> Unit,
     onMessageShown: () -> Unit,
@@ -133,6 +145,31 @@ fun RecurringListScreen(
                     ) {
                         item {
                             PlannedCard(content)
+                        }
+                        // FR-REC-03 / FR-REC-04: what is due this month and what the user did about it.
+                        if (content.due.isNotEmpty()) {
+                            item(key = "due_header") {
+                                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                    Text("Due this month", style = MaterialTheme.typography.titleMedium)
+                                    Text(
+                                        "Confirm an item to record it as an expense. Weekly items are not tracked here.",
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
+                                }
+                            }
+                            items(content.due, key = { "due_${it.item.id}" }) { due ->
+                                DueRow(
+                                    due = due,
+                                    today = today,
+                                    categoryName = categoryNames[due.item.categoryId] ?: due.item.categoryId,
+                                    onConfirm = { onConfirm(due.item.id) },
+                                    onSkip = { onSkip(due.item.id) },
+                                    onUndoSkip = { onUndoSkip(due.item.id) }
+                                )
+                            }
+                            item(key = "all_header") {
+                                Text("All recurring items", style = MaterialTheme.typography.titleMedium)
+                            }
                         }
                         if (content.items.isEmpty()) {
                             item {
@@ -192,6 +229,55 @@ private fun PlannedCard(content: RecurringListContent) {
             }
         }
     }
+}
+
+/** One due item: status line plus the actions that make sense for that status. */
+@Composable
+private fun DueRow(
+    due: DueRecurring,
+    today: LocalDate,
+    categoryName: String,
+    onConfirm: () -> Unit,
+    onSkip: () -> Unit,
+    onUndoSkip: () -> Unit
+) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text(due.item.name, style = MaterialTheme.typography.titleMedium)
+                Text(dueStatusLabel(due, today), style = MaterialTheme.typography.labelLarge)
+            }
+            Text(
+                "$categoryName · due ${due.dueDate.format(DUE_DATE_FORMAT)}",
+                style = MaterialTheme.typography.bodySmall
+            )
+            Text(
+                formatMinorUnits(due.item.amountMinor, due.item.currency) +
+                    if (due.item.currency != Currencies.BASE) "  ≈ ${formatMinorUnits(due.item.baseAmountMinor)}" else "",
+                style = MaterialTheme.typography.bodyMedium
+            )
+            when (due.status) {
+                DueStatus.PENDING -> Row {
+                    Button(onClick = onConfirm) { Text("Confirm") }
+                    TextButton(onClick = onSkip) { Text("Skip") }
+                }
+                DueStatus.SKIPPED -> TextButton(onClick = onUndoSkip) { Text("Undo skip") }
+                DueStatus.CONFIRMED -> Text(
+                    "Recorded as an expense. Edit or delete it in All expenses.",
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+        }
+    }
+}
+
+private val DUE_DATE_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("dd MMM", Locale.ENGLISH)
+
+internal fun dueStatusLabel(due: DueRecurring, today: LocalDate): String = when {
+    due.status == DueStatus.CONFIRMED -> "Confirmed"
+    due.status == DueStatus.SKIPPED -> "Skipped"
+    due.isOverdue(today) -> "Pending · overdue"
+    else -> "Pending"
 }
 
 @Composable

@@ -10,6 +10,7 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.CollectionReference
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.FirebaseFirestoreException
+import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.Source
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.awaitClose
@@ -52,6 +53,27 @@ class FirestoreExpenseRepository @Inject constructor(
         awaitClose { registration.remove() }
     }
 
+    /**
+     * Newest expenses first. Ordering by one field needs NO composite index (Firestore creates single-field
+     * indexes automatically). The limit keeps the read cost small.
+     */
+    override fun observeRecentExpenses(limit: Int): Flow<List<Expense>> = callbackFlow {
+        val registration = expensesCollection()
+            .orderBy("date", Query.Direction.DESCENDING)
+            .limit(limit.toLong())
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    close(error)
+                    return@addSnapshotListener
+                }
+                val expenses = snapshot?.documents.orEmpty().mapNotNull { doc ->
+                    doc.data?.let { ExpenseMapper.fromMap(doc.id, it.withDates()) }
+                }
+                trySend(expenses)
+            }
+        awaitClose { registration.remove() }
+    }
+
     override suspend fun getExpense(id: String): Result<Expense?> = safeCall(
         "Could not load this expense. Check your connection and try again."
     ) {
@@ -79,6 +101,14 @@ class FirestoreExpenseRepository @Inject constructor(
     ) {
         expensesCollection().document(expense.id)
             .update(ExpenseMapper.toMap(expense, Date(), isNew = false))   // fails if it was deleted meanwhile
+            .awaitOrQueue()
+    }
+
+    override suspend fun upsertExpense(expense: Expense): Result<Unit> = safeCall(
+        "Could not save the expense. Please try again."
+    ) {
+        expensesCollection().document(expense.id)
+            .set(ExpenseMapper.toMap(expense, Date(), isNew = true))
             .awaitOrQueue()
     }
 

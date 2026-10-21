@@ -10,4 +10,7 @@ interface CategoryRepository {
 
     /** Creates the 7 default categories if the user has none yet. Safe to call repeatedly. */
     suspend fun seedDefaultCategoriesIfEmpty(): Result<Unit>
+
+    /** FR-EXP-09: star / unstar a category; favourites are listed first in quick-add. */
+    suspend fun setFavourite(id: String, favourite: Boolean): Result<Unit>
 }

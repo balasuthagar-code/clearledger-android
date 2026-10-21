@@ -18,4 +18,13 @@ interface ExpenseRepository {
     suspend fun updateExpense(expense: Expense): Result<Unit>
 
     suspend fun deleteExpense(id: String): Result<Unit>
+
+    /** FR-EXP-08: the user's most recent expenses (newest first, at most [limit]) - the source of merchant memory. */
+    fun observeRecentExpenses(limit: Int): Flow<List<Expense>>
+
+    /**
+     * Creates or overwrites the expense with the id GIVEN in [expense]. Used by recurring confirmation
+     * (deterministic id) so confirming twice can never create a duplicate.
+     */
+    suspend fun upsertExpense(expense: Expense): Result<Unit>
 }
