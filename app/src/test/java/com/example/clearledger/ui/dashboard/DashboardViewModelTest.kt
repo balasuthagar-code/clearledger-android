@@ -6,9 +6,11 @@ import com.example.clearledger.core.common.UiState
 import com.example.clearledger.domain.model.Expense
 import com.example.clearledger.domain.model.ExpenseCategory
 import com.example.clearledger.domain.model.ExpenseClassification
+import com.example.clearledger.domain.model.GoalSummary
 import com.example.clearledger.domain.repository.CategoryRepository
 import com.example.clearledger.domain.repository.ExpenseRepository
 import com.example.clearledger.domain.repository.IncomeSummarySource
+import com.example.clearledger.domain.repository.PrimaryGoalSource
 import com.example.clearledger.domain.usecase.CalculateMonthlySummaryUseCase
 import com.example.clearledger.domain.usecase.ObserveMonthlySummaryUseCase
 import com.example.clearledger.testutil.InMemoryExpenseRepository
@@ -65,13 +67,23 @@ class DashboardViewModelTest {
         }
     }
 
+    private class FakeGoal(private val goal: GoalSummary? = null) : PrimaryGoalSource {
+        override fun observePrimaryGoal(): Flow<GoalSummary?> = flowOf(goal)
+    }
+
+    private class FailingGoal : PrimaryGoalSource {
+        override fun observePrimaryGoal(): Flow<GoalSummary?> = flow { throw RuntimeException("goal boom") }
+    }
+
     private fun viewModel(
         expenses: ExpenseRepository,
         income: IncomeSummarySource = FakeIncome(),
-        categories: CategoryRepository = FakeCategories()
+        categories: CategoryRepository = FakeCategories(),
+        goal: PrimaryGoalSource = FakeGoal()
     ) = DashboardViewModel(
         ObserveMonthlySummaryUseCase(expenses, income, CalculateMonthlySummaryUseCase()),
-        categories
+        categories,
+        goal
     )
 
     private fun expenseThisMonth(base: Long) = Expense(
@@ -133,5 +145,36 @@ class DashboardViewModelTest {
         advanceUntilIdle()
 
         assertEquals(1, categories.seedCalls)
+    }
+
+    @Test
+    fun primaryGoal_isNullWhenNoGoalExists() = runTest {
+        val vm = viewModel(FakeExpenses())
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.primaryGoal.collect {} }
+        advanceUntilIdle()
+
+        assertEquals(null, vm.primaryGoal.value)
+    }
+
+    @Test
+    fun primaryGoal_isExposedToTheDashboard() = runTest {
+        val goal = GoalSummary("MacBook Pro M4", savedMinor = 9_800_000, targetMinor = 49_000_000)
+        val vm = viewModel(FakeExpenses(), goal = FakeGoal(goal))
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.primaryGoal.collect {} }
+        advanceUntilIdle()
+
+        assertEquals(goal, vm.primaryGoal.value)
+        assertEquals(20, vm.primaryGoal.value!!.progressPercent)
+    }
+
+    @Test
+    fun goalFailure_doesNotBreakTheDashboard() = runTest {
+        val vm = viewModel(FakeExpenses(listOf(expenseThisMonth(500_000))), goal = FailingGoal())
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.primaryGoal.collect {} }
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.uiState.collect {} }
+        advanceUntilIdle()
+
+        assertEquals(null, vm.primaryGoal.value)
+        assertTrue(vm.uiState.value is UiState.Success)
     }
 }

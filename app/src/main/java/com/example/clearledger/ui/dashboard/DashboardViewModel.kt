@@ -4,8 +4,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.clearledger.core.common.MonthKey
 import com.example.clearledger.core.common.UiState
+import com.example.clearledger.domain.model.GoalSummary
 import com.example.clearledger.domain.model.MonthlySummary
 import com.example.clearledger.domain.repository.CategoryRepository
+import com.example.clearledger.domain.repository.PrimaryGoalSource
 import com.example.clearledger.domain.usecase.ObserveMonthlySummaryUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -25,7 +27,8 @@ import javax.inject.Inject
 @HiltViewModel
 class DashboardViewModel @Inject constructor(
     private val observeMonthlySummary: ObserveMonthlySummaryUseCase,
-    private val categoryRepository: CategoryRepository
+    private val categoryRepository: CategoryRepository,
+    primaryGoalSource: PrimaryGoalSource
 ) : ViewModel() {
 
     // Mutable state stays private; the UI only sees read-only StateFlows (assignment rule).
@@ -57,6 +60,12 @@ class DashboardViewModel @Inject constructor(
             .map { list -> list.associate { it.id to it.name } }
             .catch { emit(emptyMap()) }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+
+    /** FR-DASH-05: the primary goal's progress, or null (no goal yet / goals module not connected). */
+    val primaryGoal: StateFlow<GoalSummary?> =
+        primaryGoalSource.observePrimaryGoal()
+            .catch { emit(null) }                       // a goal problem must never break the dashboard
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     init {
         // Makes sure the default categories exist. Idempotent; Member 1's onboarding can take this over.
