@@ -4,398 +4,405 @@ package com.example.clearledger.ui.income
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.collectAsState
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.example.clearledger.core.common.IncomeEntryValidator
-import com.example.clearledger.domain.model.IncomeEntry
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.clearledger.domain.model.IncomeSource
-import java.time.LocalDate
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+import androidx.compose.material3.ExposedDropdownMenuBox
 
+private val incomeSourceTypes = listOf(
+    "SALARY",
+    "FREELANCE",
+    "BUSINESS",
+    "INVESTMENT",
+    "OTHER"
+)
+
+private val incomeCurrencies = listOf(
+    "LKR",
+    "USD",
+    "EUR",
+    "GBP",
+    "AUD",
+    "INR"
+)
+
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun IncomeEntriesScreen(
-    viewModel: IncomeEntriesViewModel
+fun IncomeSourcesScreen(
+    viewModel: IncomeSourcesViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsState()
-    var showForm by remember { mutableStateOf(false) }
-    var editing by remember { mutableStateOf<IncomeEntry?>(null) }
 
-    val visibleEntries = state.entries.filter { entry ->
-        (state.selectedMonth.isBlank() ||
-                entry.monthKey.contains(state.selectedMonth.trim())) &&
-                (state.selectedSourceId.isBlank() ||
-                        entry.sourceId == state.selectedSourceId)
-    }.sortedByDescending { it.date }
+    var showDialog by remember { mutableStateOf(false) }
+    var editingSource by remember { mutableStateOf<IncomeSource?>(null) }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp)
-    ) {
-        Text(
-            text = "Income History",
-            style = MaterialTheme.typography.headlineSmall
-        )
+    var sourceName by remember { mutableStateOf("") }
+    var sourceType by remember { mutableStateOf("SALARY") }
+    var sourceCurrency by remember { mutableStateOf("LKR") }
+    var sourceActive by remember { mutableStateOf(true) }
 
-        Button(
-            onClick = {
-                editing = null
-                viewModel.clearError()
-                showForm = true
-            },
-            modifier = Modifier.padding(vertical = 12.dp)
-        ) {
-            Text("Record Income")
+    fun openAddDialog() {
+        editingSource = null
+        sourceName = ""
+        sourceType = "SALARY"
+        sourceCurrency = "LKR"
+        sourceActive = true
+        viewModel.clearError()
+        viewModel.clearMessage()
+        showDialog = true
+    }
+
+    fun openEditDialog(source: IncomeSource) {
+        editingSource = source
+        sourceName = source.name
+        sourceType = source.type
+        sourceCurrency = source.defaultCurrency
+        sourceActive = source.active
+        viewModel.clearError()
+        viewModel.clearMessage()
+        showDialog = true
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Income Sources") }
+            )
         }
-
-        OutlinedTextField(
-            value = state.selectedMonth,
-            onValueChange = viewModel::setMonthFilter,
-            label = { Text("Filter month (YYYY-MM)") },
-            placeholder = { Text("2026-10") },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        SourceSelector(
-            sources = state.sources,
-            selectedId = state.selectedSourceId,
-            label = "Filter by source (All sources)",
-            onSelected = viewModel::setSourceFilter,
-            includeAll = true
-        )
-
-        state.error?.let { message ->
+    ) { paddingValues ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
             Text(
-                text = message,
-                color = MaterialTheme.colorScheme.error,
-                modifier = Modifier.padding(vertical = 8.dp)
+                text = "Manage where your income comes from.",
+                style = MaterialTheme.typography.bodyMedium
             )
-        }
 
-        if (state.isLoading) {
-            CircularProgressIndicator(
-                modifier = Modifier.padding(16.dp)
-            )
-        } else if (visibleEntries.isEmpty()) {
-            Text(
-                text = "No income entries found. Record your first income.",
-                modifier = Modifier.padding(top = 16.dp)
-            )
-        } else {
-            LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-                modifier = Modifier.padding(top = 12.dp)
+            Button(
+                onClick = { openAddDialog() },
+                modifier = Modifier.fillMaxWidth()
             ) {
-                items(visibleEntries, key = { it.id }) { entry ->
-                    IncomeEntryCard(
-                        entry = entry,
-                        onEdit = {
-                            editing = entry
-                            viewModel.clearError()
-                            showForm = true
-                        },
-                        onDelete = {
-                            viewModel.deleteEntry(entry.id)
-                        }
-                    )
-                }
+                Text("Add Income Source")
             }
-        }
-    }
 
-    if (showForm) {
-        IncomeEntryFormDialog(
-            entry = editing,
-            sources = state.sources,
-            viewModel = viewModel,
-            saving = state.isSaving,
-            onDismiss = {
-                showForm = false
-                editing = null
-            },
-            onSave = { sourceId, amount, currency, rate, date, note, status ->
-                viewModel.saveEntry(
-                    id = editing?.id.orEmpty(),
-                    sourceId = sourceId,
-                    amount = amount,
-                    currency = currency,
-                    rate = rate,
-                    date = date,
-                    note = note,
-                    status = status
-                )
-            }
-        )
-    }
-}
-
-@Composable
-private fun IncomeEntryCard(
-    entry: IncomeEntry,
-    onEdit: () -> Unit,
-    onDelete: () -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp)
-    ) {
-        Text(
-            text = entry.sourceName,
-            style = MaterialTheme.typography.titleMedium
-        )
-
-        Text(
-            "${entry.currency} ${
-                IncomeEntryValidator.formatAmount(entry.originalAmountMinor)
-            }"
-        )
-
-        if (entry.currency != "LKR") {
-            Text(
-                "≈ LKR ${
-                    IncomeEntryValidator.formatAmount(entry.baseAmountMinor)
-                }"
-            )
-        }
-
-        Text("Date: ${entry.date}")
-        Text("Status: ${entry.status}")
-        if (entry.note.isNotBlank()) Text("Note: ${entry.note}")
-
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.padding(top = 8.dp)
-        ) {
-            OutlinedButton(onClick = onEdit) {
-                Text("Edit")
-            }
-            OutlinedButton(onClick = onDelete) {
-                Text("Delete")
-            }
-        }
-    }
-}
-
-@Composable
-private fun IncomeEntryFormDialog(
-    entry: IncomeEntry?,
-    sources: List<IncomeSource>,
-    viewModel: IncomeEntriesViewModel,
-    saving: Boolean,
-    onDismiss: () -> Unit,
-    onSave: (
-        String, String, String, String, String, String, String
-    ) -> Unit
-) {
-    var sourceId by remember(entry?.id) {
-        mutableStateOf(entry?.sourceId.orEmpty())
-    }
-    var amount by remember(entry?.id) {
-        mutableStateOf(
-            entry?.let {
-                IncomeEntryValidator.formatAmount(it.originalAmountMinor)
-            }.orEmpty()
-        )
-    }
-    var currency by remember(entry?.id) {
-        mutableStateOf(entry?.currency ?: "LKR")
-    }
-    var rate by remember(entry?.id) {
-        mutableStateOf(entry?.exchangeRate ?: "1")
-    }
-    var date by remember(entry?.id) {
-        mutableStateOf(entry?.date ?: LocalDate.now().toString())
-    }
-    var note by remember(entry?.id) {
-        mutableStateOf(entry?.note.orEmpty())
-    }
-    var status by remember(entry?.id) {
-        mutableStateOf(entry?.status ?: "EXPECTED")
-    }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Text(if (entry == null) "Record Income" else "Edit Income")
-        },
-        text = {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                SourceSelector(
-                    sources = sources.filter { it.active || it.id == sourceId },
-                    selectedId = sourceId,
-                    label = "Income source",
-                    onSelected = { sourceId = it },
-                    includeAll = false
-                )
-
-                OutlinedTextField(
-                    value = amount,
-                    onValueChange = { amount = it },
-                    label = { Text("Amount") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                SimpleSelector(
-                    label = "Currency",
-                    selected = currency,
-                    options = IncomeEntryValidator.supportedCurrencies,
-                    onSelected = {
-                        currency = it
-                        rate = if (it == "LKR") "1"
-                        else viewModel.lastRateFor(it)
-                    }
-                )
-
-                if (currency != "LKR") {
-                    OutlinedTextField(
-                        value = rate,
-                        onValueChange = { rate = it },
-                        label = { Text("Exchange rate (LKR per 1 $currency)") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-
-                OutlinedTextField(
-                    value = date,
-                    onValueChange = { date = it },
-                    label = { Text("Date (YYYY-MM-DD)") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                OutlinedTextField(
-                    value = note,
-                    onValueChange = { note = it },
-                    label = { Text("Note (optional)") },
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                SimpleSelector(
-                    label = "Status",
-                    selected = status,
-                    options = IncomeEntryValidator.statuses,
-                    onSelected = { status = it }
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(
-                enabled = !saving,
-                onClick = {
-                    onSave(
-                        sourceId, amount, currency, rate,
-                        date, note, status
-                    )
-                }
-            ) {
-                Text(if (saving) "Saving..." else "Save")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
-            }
-        }
-    )
-}
-
-@Composable
-private fun SourceSelector(
-    sources: List<IncomeSource>,
-    selectedId: String,
-    label: String,
-    onSelected: (String) -> Unit,
-    includeAll: Boolean
-) {
-    var expanded by remember { mutableStateOf(false) }
-    val selectedName = sources.firstOrNull { it.id == selectedId }?.name
-        ?: if (includeAll && selectedId.isBlank()) "All sources"
-        else "Select source"
-
-    Column {
-        OutlinedButton(
-            onClick = { expanded = true },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("$label: $selectedName")
-        }
-
-        DropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false }
-        ) {
-            if (includeAll) {
-                DropdownMenuItem(
-                    text = { Text("All sources") },
-                    onClick = {
-                        onSelected("")
-                        expanded = false
-                    }
+            state.error?.let { error ->
+                Text(
+                    text = error,
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodyMedium
                 )
             }
 
-            sources.forEach { source ->
-                DropdownMenuItem(
-                    text = {
+            state.message?.let { message ->
+                Text(
+                    text = message,
+                    color = MaterialTheme.colorScheme.primary,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+
+            when {
+                state.isLoading -> {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        CircularProgressIndicator()
                         Text(
-                            source.name +
-                                    if (source.active) "" else " (Inactive)"
+                            text = "Loading income sources...",
+                            modifier = Modifier.padding(top = 8.dp)
                         )
-                    },
-                    onClick = {
-                        onSelected(source.id)
-                        expanded = false
+                    }
+                }
+
+                state.incomeSources.isEmpty() -> {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Text("No income sources yet.")
+                        Text(
+                            text = "Add your salary, freelance work, or other income.",
+                            modifier = Modifier.padding(top = 8.dp),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                }
+
+                else -> {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        items(
+                            items = state.incomeSources,
+                            key = { it.id }
+                        ) { source ->
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = CardDefaults.cardColors()
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(16.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Text(
+                                        text = source.name,
+                                        style = MaterialTheme.typography.titleMedium
+                                    )
+
+                                    Text("Type: ${source.type}")
+                                    Text("Default currency: ${source.defaultCurrency}")
+                                    Text(
+                                        text = if (source.active) {
+                                            "Status: Active"
+                                        } else {
+                                            "Status: Inactive"
+                                        }
+                                    )
+
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.End,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        OutlinedButton(
+                                            onClick = {
+                                                openEditDialog(source)
+                                            }
+                                        ) {
+                                            Text("Edit")
+                                        }
+
+                                        Spacer(modifier = Modifier.width(8.dp))
+
+                                        Button(
+                                            onClick = {
+                                                viewModel.updateIncomeSource(
+                                                    source.copy(active = !source.active)
+                                                )
+                                            },
+                                            enabled = !state.isSaving
+                                        ) {
+                                            Text(
+                                                if (source.active) {
+                                                    "Deactivate"
+                                                } else {
+                                                    "Activate"
+                                                }
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (showDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                if (!state.isSaving) {
+                    showDialog = false
+                    viewModel.clearError()
+                }
+            },
+            title = {
+                Text(
+                    if (editingSource == null) {
+                        "Add Income Source"
+                    } else {
+                        "Edit Income Source"
                     }
                 )
+            },
+            text = {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    OutlinedTextField(
+                        value = sourceName,
+                        onValueChange = { sourceName = it },
+                        label = { Text("Source name") },
+                        placeholder = { Text("e.g. Salary") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !state.isSaving
+                    )
+
+                    SourceDropdown(
+                        label = "Income type",
+                        selectedValue = sourceType,
+                        options = incomeSourceTypes,
+                        onSelected = { sourceType = it },
+                        enabled = !state.isSaving
+                    )
+
+                    SourceDropdown(
+                        label = "Default currency",
+                        selectedValue = sourceCurrency,
+                        options = incomeCurrencies,
+                        onSelected = { sourceCurrency = it },
+                        enabled = !state.isSaving
+                    )
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text("Active")
+                        androidx.compose.material3.Switch(
+                            checked = sourceActive,
+                            onCheckedChange = { sourceActive = it },
+                            enabled = !state.isSaving
+                        )
+                    }
+
+                    state.error?.let { error ->
+                        Text(
+                            text = error,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    enabled = !state.isSaving && sourceName.isNotBlank(),
+                    onClick = {
+                        val existingSource = editingSource
+
+                        val source = IncomeSource(
+                            id = existingSource?.id ?: "",
+                            name = sourceName.trim(),
+                            type = sourceType,
+                            defaultCurrency = sourceCurrency,
+                            active = sourceActive
+                        )
+
+                        if (existingSource == null) {
+                            viewModel.addIncomeSource(source)
+                        } else {
+                            viewModel.updateIncomeSource(source)
+                        }
+
+                        // The dialog stays open while saving.
+                        // Close it when the ViewModel reports success.
+                    }
+                ) {
+                    if (state.isSaving) {
+                        CircularProgressIndicator()
+                    } else {
+                        Text("Save")
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    enabled = !state.isSaving,
+                    onClick = {
+                        showDialog = false
+                        viewModel.clearError()
+                    }
+                ) {
+                    Text("Cancel")
+                }
             }
+        )
+    }
+
+    // Close the dialog after a successful save.
+    androidx.compose.runtime.LaunchedEffect(state.isSaving, state.message) {
+        if (showDialog && !state.isSaving && state.message != null) {
+            showDialog = false
         }
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SimpleSelector(
+private fun SourceDropdown(
     label: String,
-    selected: String,
+    selectedValue: String,
     options: List<String>,
-    onSelected: (String) -> Unit
+    onSelected: (String) -> Unit,
+    enabled: Boolean
 ) {
     var expanded by remember { mutableStateOf(false) }
 
-    Column {
-        OutlinedButton(
-            onClick = { expanded = true },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("$label: $selected")
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = {
+            if (enabled) expanded = !expanded
         }
+    ) {
+        OutlinedTextField(
+            value = selectedValue,
+            onValueChange = {},
+            readOnly = true,
+            label = {
+                Text(text = label)
+            },
+            trailingIcon = {
+                Text(text = if (expanded) "▲" else "▼")
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .menuAnchor(),
+            enabled = enabled
+        )
 
-        DropdownMenu(
+        ExposedDropdownMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false }
         ) {

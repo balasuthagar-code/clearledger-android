@@ -1,3 +1,4 @@
+
 package com.example.clearledger.navigation
 
 import androidx.compose.foundation.layout.Box
@@ -7,11 +8,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+
 import com.example.clearledger.ui.auth.LoginScreen
 import com.example.clearledger.ui.auth.LoginViewModel
 import com.example.clearledger.ui.auth.RegisterScreen
@@ -20,21 +22,11 @@ import com.example.clearledger.ui.auth.SplashState
 import com.example.clearledger.ui.auth.SplashViewModel
 import com.example.clearledger.ui.home.HomeScreen
 import com.example.clearledger.ui.home.HomeViewModel
-
-import androidx.compose.material3.Button
-import androidx.compose.material3.Text
-
 import com.example.clearledger.ui.income.IncomeEntriesScreen
 import com.example.clearledger.ui.income.IncomeEntriesViewModel
-
-import androidx.hilt.navigation.compose.hiltViewModel
+import com.example.clearledger.ui.income.IncomeSourcesScreen
 import com.example.clearledger.ui.goals.CreateGoalScreen
-import com.example.clearledger.ui.goals.SavingsGoalsViewModel
-
 import com.example.clearledger.ui.goals.SavingsContributionsScreen
-import androidx.compose.material3.Button
-import androidx.compose.material3.Text
-import androidx.compose.foundation.layout.fillMaxWidth
 
 @Composable
 fun AppNavigation() {
@@ -45,26 +37,35 @@ fun AppNavigation() {
         startDestination = Routes.SPLASH
     ) {
         composable(Routes.SPLASH) {
-            val splashViewModel: SplashViewModel = hiltViewModel()
-            val state = splashViewModel.splashState.collectAsStateWithLifecycle().value
+            val viewModel: SplashViewModel = hiltViewModel()
+            val state = viewModel.splashState.collectAsStateWithLifecycle().value
 
             LaunchedEffect(state) {
                 when (state) {
                     SplashState.NavigateHome -> {
                         navController.navigate(Routes.HOME) {
-                            popUpTo(Routes.SPLASH) { inclusive = true }
+                            popUpTo(Routes.SPLASH) {
+                                inclusive = true
+                            }
                         }
                     }
+
                     SplashState.NavigateLogin -> {
                         navController.navigate(Routes.LOGIN) {
-                            popUpTo(Routes.SPLASH) { inclusive = true }
+                            popUpTo(Routes.SPLASH) {
+                                inclusive = true
+                            }
                         }
                     }
+
                     SplashState.NavigateRegister -> {
                         navController.navigate(Routes.REGISTER) {
-                            popUpTo(Routes.SPLASH) { inclusive = true }
+                            popUpTo(Routes.SPLASH) {
+                                inclusive = true
+                            }
                         }
                     }
+
                     SplashState.Loading -> Unit
                 }
             }
@@ -83,13 +84,17 @@ fun AppNavigation() {
 
             LoginScreen(
                 loginState = state,
-                onLogin = { email, password -> viewModel.login(email, password) },
+                onLogin = { email, password ->
+                    viewModel.login(email, password)
+                },
                 onNavigateRegister = {
                     navController.navigate(Routes.REGISTER)
                 },
                 onNavigateHome = {
                     navController.navigate(Routes.HOME) {
-                        popUpTo(Routes.LOGIN) { inclusive = true }
+                        popUpTo(Routes.LOGIN) {
+                            inclusive = true
+                        }
                     }
                 }
             )
@@ -101,15 +106,22 @@ fun AppNavigation() {
 
             RegisterScreen(
                 registerState = state,
-                onRegister = { email, password -> viewModel.register(email, password) },
-                onRetry = { viewModel.retryProfileSetup() },
+                onRegister = { email, password ->
+                    viewModel.register(email, password)
+                },
+                onRetry = {
+                    viewModel.retryProfileSetup()
+                },
                 onNavigateHome = {
                     navController.navigate(Routes.HOME) {
-                        popUpTo(Routes.REGISTER) { inclusive = true }
+                        popUpTo(Routes.REGISTER) {
+                            inclusive = true
+                        }
                     }
                 }
             )
         }
+
 
         composable(Routes.HOME) {
             val viewModel: HomeViewModel = hiltViewModel()
@@ -123,15 +135,18 @@ fun AppNavigation() {
                         }
                     }
                 },
+                onIncomeSources = {
+                    navController.navigate(Routes.INCOME_SOURCES)
+                },
+                onIncomeEntries = {
+                    navController.navigate(Routes.INCOME_ENTRIES)
+                },
                 onSavingsGoals = {
                     navController.navigate(Routes.SAVINGS_GOALS)
                 },
                 onSavingsContributions = {
                     navController.navigate(Routes.SAVINGS_CONTRIBUTIONS)
-                },
-                onIncomeSources = {
-                    navController.navigate(Routes.INCOME_SOURCES)
-                },
+                }
             )
         }
 
@@ -142,14 +157,15 @@ fun AppNavigation() {
         }
 
         composable(Routes.SAVINGS_GOALS) {
-            val viewModel: SavingsGoalsViewModel = hiltViewModel()
-            CreateGoalScreen(viewModel = viewModel)
-        }
-        composable(Routes.SAVINGS_GOALS) {
             CreateGoalScreen()
         }
+
         composable(Routes.SAVINGS_CONTRIBUTIONS) {
             SavingsContributionsScreen()
+        }
+
+        composable(Routes.INCOME_SOURCES) {
+            IncomeSourcesScreen()
         }
     }
 }

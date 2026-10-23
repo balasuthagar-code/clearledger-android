@@ -66,11 +66,13 @@ dependencies {
     androidTestImplementation(libs.androidx.junit)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     debugImplementation(libs.androidx.compose.ui.tooling)
-    implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:<your-existing-version>")
-    implementation("androidx.hilt:hilt-navigation-compose:<your-existing-version>")
-    implementation("com.google.firebase:firebase-auth:<your-existing-version>")
-    implementation("com.google.firebase:firebase-firestore:<your-existing-version>")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:<your-existing-version>")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:<compatible-version>")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.7")
+    implementation("androidx.hilt:hilt-navigation-compose:1.2.0")
 
+    implementation("com.google.firebase:firebase-auth:23.1.0")
+    implementation("com.google.firebase:firebase-firestore:25.1.1")
+
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.9.0")
+    implementation("androidx.hilt:hilt-navigation-compose:1.2.0")
+    implementation("androidx.compose.material3:material3")
 }

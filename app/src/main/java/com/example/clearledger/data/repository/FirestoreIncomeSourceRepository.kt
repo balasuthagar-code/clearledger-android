@@ -1,115 +1,99 @@
 package com.example.clearledger.data.repository
 
-import com.example.clearledger.domain.model.IncomeEntry
-import com.google.firebase.Timestamp
+import com.example.clearledger.domain.model.IncomeSource
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
-import java.time.LocalDate
-import java.time.ZoneId
-import java.util.Date
 import javax.inject.Inject
+import javax.inject.Singleton
 
-class FirestoreIncomeEntryRepository @Inject constructor(
+@Singleton
+class FirestoreIncomeSourceRepository @Inject constructor(
     private val auth: FirebaseAuth,
     private val firestore: FirebaseFirestore
-) : IncomeEntryRepository {
+) : IncomeSourceRepository {
 
-    private fun collection() =
+    private fun incomeSourcesCollection() =
         firestore.collection("users")
-            .document(auth.currentUser?.uid
-                ?: throw IllegalStateException("Please log in first"))
-            .collection("incomeEntries")
+            .document(
+                auth.currentUser?.uid
+                    ?: throw IllegalStateException("User is not logged in.")
+            )
+            .collection("incomeSources")
 
-    override fun getIncomeEntries(): Flow<List<IncomeEntry>> =
-        callbackFlow {
-            val listener = collection()
-                .orderBy("date", com.google.firebase.firestore.Query.Direction.DESCENDING)
-                .addSnapshotListener { snapshot, error ->
-                    if (error != null) {
-                        close(error)
-                        return@addSnapshotListener
-                    }
+    override fun getIncomeSources(): Flow<List<IncomeSource>> = callbackFlow {
+        val uid = auth.currentUser?.uid
 
-                    val entries = snapshot?.documents?.mapNotNull { document ->
-                        val timestamp = document.getTimestamp("date")
-                        val date = timestamp?.toDate()?.toInstant()
-                            ?.atZone(ZoneId.of("Asia/Colombo"))
-                            ?.toLocalDate()?.toString() ?: return@mapNotNull null
-
-                        IncomeEntry(
-                            id = document.id,
-                            sourceId = document.getString("sourceId") ?: "",
-                            sourceName = document.getString("sourceName") ?: "",
-                            originalAmountMinor = document.getLong("originalAmountMinor") ?: 0L,
-                            currency = document.getString("currency") ?: "LKR",
-                            exchangeRate = document.getString("exchangeRate") ?: "1",
-                            baseAmountMinor = document.getLong("baseAmountMinor") ?: 0L,
-                            date = date,
-                            monthKey = document.getString("monthKey") ?: date.substring(0, 7),
-                            note = document.getString("note") ?: "",
-                            status = document.getString("status") ?: "EXPECTED"
-                        )
-                    } ?: emptyList()
-
-                    trySend(entries)
-                }
-
-            awaitClose { listener.remove() }
+        if (uid == null) {
+            close(IllegalStateException("User is not logged in."))
+            return@callbackFlow
         }
 
-    override suspend fun addIncomeEntry(entry: IncomeEntry) {
-        val date = LocalDate.parse(entry.date)
-            .atStartOfDay(ZoneId.of("Asia/Colombo"))
-            .toInstant()
+        val listener = firestore.collection("users")
+            .document(uid)
+            .collection("incomeSources")
+            .addSnapshotListener { snapshot, error ->
 
-        val data = mapOf(
-            "sourceId" to entry.sourceId,
-            "sourceName" to entry.sourceName,
-            "originalAmountMinor" to entry.originalAmountMinor,
-            "currency" to entry.currency,
-            "exchangeRate" to entry.exchangeRate,
-            "baseAmountMinor" to entry.baseAmountMinor,
-            "date" to Timestamp(Date.from(date)),
-            "monthKey" to entry.monthKey,
-            "note" to entry.note,
-            "status" to entry.status,
-            "createdAt" to Timestamp.now(),
-            "updatedAt" to Timestamp.now()
-        )
+                if (error != null) {
+                    close(error)
+                    return@addSnapshotListener
+                }
 
-        collection().add(data).await()
+                if (snapshot != null) {
+                    val sources = snapshot.documents.mapNotNull { document ->
+                        document.toObject(IncomeSource::class.java)
+                            ?.copy(id = document.id)
+                    }
+
+                    trySend(sources)
+                }
+            }
+
+        awaitClose {
+            listener.remove()
+        }
     }
 
-    override suspend fun updateIncomeEntry(entry: IncomeEntry) {
-        require(entry.id.isNotBlank()) { "Income entry ID is missing" }
+    override suspend fun addIncomeSource(source: IncomeSource) {
+        require(source.name.isNotBlank()) {
+            "Income source name cannot be empty."
+        }
 
-        val date = LocalDate.parse(entry.date)
-            .atStartOfDay(ZoneId.of("Asia/Colombo"))
-            .toInstant()
+        val document = incomeSourcesCollection().document()
 
-        val data = mapOf(
-            "sourceId" to entry.sourceId,
-            "sourceName" to entry.sourceName,
-            "originalAmountMinor" to entry.originalAmountMinor,
-            "currency" to entry.currency,
-            "exchangeRate" to entry.exchangeRate,
-            "baseAmountMinor" to entry.baseAmountMinor,
-            "date" to Timestamp(Date.from(date)),
-            "monthKey" to entry.monthKey,
-            "note" to entry.note,
-            "status" to entry.status,
-            "updatedAt" to Timestamp.now()
+        val sourceData = hashMapOf(
+            "id" to document.id,
+            "name" to source.name.trim(),
+            "type" to source.type,
+            "defaultCurrency" to source.defaultCurrency,
+            "active" to source.active
         )
 
-        collection().document(entry.id).update(data).await()
+        document.set(sourceData).await()
     }
 
-    override suspend fun deleteIncomeEntry(entryId: String) {
-        require(entryId.isNotBlank()) { "Income entry ID is missing" }
-        collection().document(entryId).delete().await()
+    override suspend fun updateIncomeSource(source: IncomeSource) {
+        require(source.id.isNotBlank()) {
+            "Income source ID cannot be empty."
+        }
+
+        require(source.name.isNotBlank()) {
+            "Income source name cannot be empty."
+        }
+
+        val sourceData = mapOf(
+            "name" to source.name.trim(),
+            "type" to source.type,
+            "defaultCurrency" to source.defaultCurrency,
+            "active" to source.active
+        )
+
+        incomeSourcesCollection()
+            .document(source.id)
+            .update(sourceData)
+            .await()
     }
 }

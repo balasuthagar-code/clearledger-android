@@ -3,6 +3,8 @@ package com.example.clearledger.di
 
 import com.example.clearledger.data.repository.FirestoreIncomeEntryRepository
 import com.example.clearledger.data.repository.IncomeEntryRepository
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -15,7 +17,13 @@ object IncomeEntryModule {
 
     @Provides
     @Singleton
-    fun provideIncomeEntryRepository(): IncomeEntryRepository {
-        return FirestoreIncomeEntryRepository()
+    fun provideIncomeEntryRepository(
+        auth: FirebaseAuth,
+        firestore: FirebaseFirestore
+    ): IncomeEntryRepository {
+        return FirestoreIncomeEntryRepository(
+            auth = auth,
+            firestore = firestore
+        )
     }
 }

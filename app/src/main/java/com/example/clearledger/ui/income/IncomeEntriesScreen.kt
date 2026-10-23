@@ -32,10 +32,14 @@ import com.example.clearledger.core.common.IncomeEntryValidator
 import com.example.clearledger.domain.model.IncomeEntry
 import com.example.clearledger.domain.model.IncomeSource
 import java.time.LocalDate
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.OutlinedTextField
 
 @Composable
 fun IncomeEntriesScreen(
-    viewModel: IncomeEntriesViewModel
+    viewModel: IncomeEntriesViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsState()
     var showForm by remember { mutableStateOf(false) }
