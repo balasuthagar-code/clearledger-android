@@ -159,13 +159,20 @@ class SavingsContributionsViewModel @Inject constructor(
             }
 
             try {
+
+                val amountMinor = (amount * 100).toLong()
+
                 val contribution = SavingsContribution(
                     id = editing?.id ?: "",
                     goalId = goal.id,
-                    amount = amount,
+                    amountMinor = amountMinor,
                     date = date,
-                    note = note.trim()
+                    note = note.trim(),
+                    createdAt = editing?.createdAt ?: System.currentTimeMillis(),
+                    updatedAt = System.currentTimeMillis()
                 )
+
+
 
                 if (editing == null) {
                     contributionRepository.addContribution(
@@ -236,3 +243,4 @@ class SavingsContributionsViewModel @Inject constructor(
         }
     }
 }
+// thisanth

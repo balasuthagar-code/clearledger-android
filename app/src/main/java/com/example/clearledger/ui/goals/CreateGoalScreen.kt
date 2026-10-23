@@ -1,8 +1,8 @@
+
 package com.example.clearledger.ui.goals
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -25,7 +25,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.example.clearledger.core.common.SavingsGoalValidator
 import com.example.clearledger.domain.model.SavingsGoal
 
 @Composable
@@ -121,7 +120,9 @@ fun CreateGoalScreen(
             enabled = !state.isSaving,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text(if (state.isSaving) "Saving..." else "Create Goal")
+            Text(
+                if (state.isSaving) "Saving..." else "Create Goal"
+            )
         }
 
         Spacer(modifier = Modifier.height(20.dp))
@@ -160,12 +161,7 @@ fun CreateGoalScreen(
 
 @Composable
 private fun SavingsGoalItem(goal: SavingsGoal) {
-    val progress = if (goal.targetAmount > 0) {
-        (goal.startingAmount / goal.targetAmount).toFloat()
-            .coerceIn(0f, 1f)
-    } else {
-        0f
-    }
+    val progress = goal.progressPercentage / 100f
 
     Column(
         modifier = Modifier
@@ -179,13 +175,19 @@ private fun SavingsGoalItem(goal: SavingsGoal) {
 
         Text(
             text = "Target: ${goal.currency} ${
-                "%.2f".format(goal.targetAmount)
+                formatMinorAmount(goal.targetAmountMinor)
             }"
         )
 
         Text(
             text = "Saved: ${goal.currency} ${
-                "%.2f".format(goal.startingAmount)
+                formatMinorAmount(goal.savedAmountMinor)
+            }"
+        )
+
+        Text(
+            text = "Remaining: ${goal.currency} ${
+                formatMinorAmount(goal.remainingAmountMinor)
             }"
         )
 
@@ -198,6 +200,13 @@ private fun SavingsGoalItem(goal: SavingsGoal) {
             modifier = Modifier.fillMaxWidth()
         )
 
-        Text(text = "${(progress * 100).toInt()}% completed")
+        Text(
+            text = "${goal.progressPercentage.toInt()}% completed"
+        )
     }
 }
+
+private fun formatMinorAmount(amountMinor: Long): String {
+    return "%.2f".format(amountMinor / 100.0)
+}
+// thsianth

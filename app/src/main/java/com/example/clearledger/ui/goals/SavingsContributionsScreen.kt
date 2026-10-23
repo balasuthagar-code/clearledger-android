@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
@@ -30,8 +31,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.clearledger.domain.model.SavingsContribution
+import com.example.clearledger.domain.model.SavingsGoal
 import java.time.LocalDate
+import java.time.YearMonth
+import java.time.temporal.ChronoUnit
 import java.util.Locale
+import kotlin.math.ceil
 
 @Composable
 fun SavingsContributionsScreen(
@@ -43,11 +48,8 @@ fun SavingsContributionsScreen(
     var editing by remember {
         mutableStateOf<SavingsContribution?>(null)
     }
-
     var amount by remember { mutableStateOf("") }
-    var date by remember {
-        mutableStateOf(LocalDate.now().toString())
-    }
+    var date by remember { mutableStateOf(LocalDate.now().toString()) }
     var note by remember { mutableStateOf("") }
 
     Column(
@@ -96,6 +98,39 @@ fun SavingsContributionsScreen(
         }
 
         state.selectedGoal?.let { goal ->
+
+            // Calculate savings directly from the selected goal
+            // and its contribution history.
+            val totalSavedMinor =
+                goal.startingSavedMinor +
+                        state.contributions.sumOf { it.amountMinor }
+
+            val remainingAmountMinor =
+                (goal.targetAmountMinor - totalSavedMinor)
+                    .coerceAtLeast(0L)
+
+            val progress = if (goal.targetAmountMinor > 0L) {
+                (totalSavedMinor.toDouble() /
+                        goal.targetAmountMinor.toDouble())
+                    .coerceIn(0.0, 1.0)
+                    .toFloat()
+            } else {
+                0f
+            }
+
+            val monthsLeft = calculateMonthsLeft(goal.deadline)
+
+            val requiredMonthlySavingMinor =
+                if (remainingAmountMinor == 0L) {
+                    0L
+                } else {
+                    val monthsForSaving = monthsLeft.coerceAtLeast(1)
+                    ceil(
+                        remainingAmountMinor.toDouble() /
+                                monthsForSaving
+                    ).toLong()
+                }
+
             Spacer(modifier = Modifier.height(12.dp))
 
             Card(modifier = Modifier.fillMaxWidth()) {
@@ -109,45 +144,46 @@ fun SavingsContributionsScreen(
 
                     Text(
                         text = "Target: ${goal.currency} ${
-                            formatAmount(goal.targetAmount)
+                            formatMinorAmount(goal.targetAmountMinor)
                         }"
                     )
 
                     Text(
                         text = "Total saved: ${goal.currency} ${
-                            formatAmount(state.totalSaved)
+                            formatMinorAmount(totalSavedMinor)
                         }"
                     )
 
                     Text(
                         text = "Remaining: ${goal.currency} ${
-                            formatAmount(state.remainingAmount)
+                            formatMinorAmount(remainingAmountMinor)
                         }"
                     )
+
+                    Text(text = "Deadline: ${goal.deadline}")
 
                     Spacer(modifier = Modifier.height(8.dp))
 
                     LinearProgressIndicator(
-                        progress = { state.progress },
+                        progress = { progress },
                         modifier = Modifier.fillMaxWidth()
                     )
 
                     Text(
-                        text = "${(state.progress * 100).toInt()}% completed"
+                        text = "${(progress * 100).toInt()}% completed"
                     )
 
                     Spacer(modifier = Modifier.height(8.dp))
 
                     Text(
                         text = "Required monthly saving: ${goal.currency} ${
-                            formatAmount(state.requiredMonthlySaving)
+                            formatMinorAmount(requiredMonthlySavingMinor)
                         }",
                         style = MaterialTheme.typography.titleMedium
                     )
 
                     Text(
-                        text = "Months remaining: ${state.monthsLeft}",
-                        style = MaterialTheme.typography.bodyMedium
+                        text = "Months remaining: $monthsLeft"
                     )
 
                     Spacer(modifier = Modifier.height(12.dp))
@@ -180,23 +216,22 @@ fun SavingsContributionsScreen(
                 Text("No contributions yet.")
             } else {
                 LazyColumn(
-                    modifier = Modifier
-                        .weight(1f, fill = true),
+                    modifier = Modifier.weight(1f, fill = true),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     items(
                         items = state.contributions,
                         key = { it.id }
                     ) { contribution ->
-                        Card(
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
+                        Card(modifier = Modifier.fillMaxWidth()) {
                             Column(
                                 modifier = Modifier.padding(12.dp)
                             ) {
                                 Text(
                                     text = "${goal.currency} ${
-                                        formatAmount(contribution.amount)
+                                        formatMinorAmount(
+                                            contribution.amountMinor
+                                        )
                                     }",
                                     style = MaterialTheme.typography.titleMedium
                                 )
@@ -214,8 +249,9 @@ fun SavingsContributionsScreen(
                                     TextButton(
                                         onClick = {
                                             editing = contribution
-                                            amount =
-                                                contribution.amount.toString()
+                                            amount = formatMinorAmount(
+                                                contribution.amountMinor
+                                            )
                                             date = contribution.date
                                             note = contribution.note
                                             viewModel.clearMessages()
@@ -264,9 +300,7 @@ fun SavingsContributionsScreen(
 
     if (showDialog) {
         AlertDialog(
-            onDismissRequest = {
-                showDialog = false
-            },
+            onDismissRequest = { showDialog = false },
             title = {
                 Text(
                     if (editing == null) {
@@ -295,7 +329,8 @@ fun SavingsContributionsScreen(
                     OutlinedTextField(
                         value = note,
                         onValueChange = { note = it },
-                        label = { Text("Note (optional)") }
+                        label = { Text("Note (optional)") },
+                        singleLine = true
                     )
                 }
             },
@@ -312,9 +347,7 @@ fun SavingsContributionsScreen(
                         showDialog = false
                     }
                 ) {
-                    Text(
-                        if (state.isSaving) "Saving..." else "Save"
-                    )
+                    Text(if (state.isSaving) "Saving..." else "Save")
                 }
             },
             dismissButton = {
@@ -328,6 +361,30 @@ fun SavingsContributionsScreen(
     }
 }
 
-private fun formatAmount(amount: Double): String {
-    return String.format(Locale.US, "%,.2f", amount)
+private fun formatMinorAmount(amountMinor: Long): String {
+    return String.format(
+        Locale.US,
+        "%,.2f",
+        amountMinor / 100.0
+    )
 }
+
+private fun calculateMonthsLeft(deadline: String): Int {
+    return try {
+        val deadlineDate = LocalDate.parse(deadline)
+        val currentMonth = YearMonth.now()
+        val deadlineMonth = YearMonth.from(deadlineDate)
+
+        if (deadlineDate.isBefore(LocalDate.now())) {
+            0
+        } else {
+            ChronoUnit.MONTHS
+                .between(currentMonth, deadlineMonth)
+                .toInt()
+                .coerceAtLeast(1)
+        }
+    } catch (_: Exception) {
+        0
+    }
+}
+// thisanth

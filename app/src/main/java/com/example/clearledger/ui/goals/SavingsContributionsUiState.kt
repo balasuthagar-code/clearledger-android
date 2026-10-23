@@ -19,27 +19,37 @@ data class SavingsContributionsUiState(
     val error: String? = null,
     val message: String? = null
 ) {
-    val totalSaved: Double
+    // Total saved = starting amount + all contributions.
+    // Amounts are stored in minor units (e.g. cents).
+    val totalSavedMinor: Long
         get() = selectedGoal?.let { goal ->
-            goal.startingAmount + contributions.sumOf { it.amount }
-        } ?: 0.0
+            goal.startingSavedMinor +
+                    contributions.sumOf { it.amountMinor }
+        } ?: 0L
 
-    val remainingAmount: Double
+    // Remaining amount needed to reach the goal.
+    val remainingAmountMinor: Long
         get() = max(
-            (selectedGoal?.targetAmount ?: 0.0) - totalSaved,
-            0.0
+            (selectedGoal?.targetAmountMinor ?: 0L) - totalSavedMinor,
+            0L
         )
 
+    // Progress from 0.0 to 1.0.
     val progress: Float
         get() {
-            val target = selectedGoal?.targetAmount ?: 0.0
-            return if (target > 0.0) {
-                min(totalSaved / target, 1.0).toFloat()
+            val target = selectedGoal?.targetAmountMinor ?: 0L
+
+            return if (target > 0L) {
+                min(
+                    totalSavedMinor.toDouble() / target.toDouble(),
+                    1.0
+                ).toFloat()
             } else {
                 0f
             }
         }
 
+    // Number of months remaining until the deadline.
     val monthsLeft: Long
         get() {
             val deadline = selectedGoal?.deadline
@@ -61,9 +71,14 @@ data class SavingsContributionsUiState(
             )
         }
 
-    val requiredMonthlySaving: Double
+    // Required monthly saving, in minor units.
+    val requiredMonthlySavingMinor: Long
         get() {
-            if (remainingAmount <= 0.0) return 0.0
-            return ceil(remainingAmount / monthsLeft)
+            if (remainingAmountMinor <= 0L) return 0L
+
+            return ceil(
+                remainingAmountMinor.toDouble() / monthsLeft.toDouble()
+            ).toLong()
         }
 }
+//thisanth

@@ -76,13 +76,19 @@ class SavingsGoalsViewModel @Inject constructor(
             }
 
             try {
+
+                val targetAmountValue = targetAmount.toDoubleOrNull() ?: 0.0
+                val startingAmountValue = startingAmount.toDoubleOrNull() ?: 0.0
+
                 val goal = SavingsGoal(
                     name = name.trim(),
-                    targetAmount = targetAmount.toDouble(),
+                    targetAmountMinor = (targetAmountValue * 100).toLong(),
                     currency = currency,
                     deadline = deadline.trim(),
-                    startingAmount = startingAmount.toDouble()
+                    startingSavedMinor = (startingAmountValue * 100).toLong()
                 )
+
+
 
                 repository.addSavingsGoal(goal)
 
@@ -109,3 +115,4 @@ class SavingsGoalsViewModel @Inject constructor(
         }
     }
 }
+//thisanth
