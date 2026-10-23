@@ -1,3 +1,4 @@
+
 package com.example.clearledger.ui.goals
 
 import androidx.compose.foundation.layout.Arrangement
@@ -30,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.clearledger.domain.model.SavingsContribution
 import java.time.LocalDate
+import java.util.Locale
 
 @Composable
 fun SavingsContributionsScreen(
@@ -43,7 +45,9 @@ fun SavingsContributionsScreen(
     }
 
     var amount by remember { mutableStateOf("") }
-    var date by remember { mutableStateOf(LocalDate.now().toString()) }
+    var date by remember {
+        mutableStateOf(LocalDate.now().toString())
+    }
     var note by remember { mutableStateOf("") }
 
     Column(
@@ -58,7 +62,9 @@ fun SavingsContributionsScreen(
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        if (state.goals.isEmpty() && !state.isLoading) {
+        if (state.isLoading) {
+            Text("Loading savings goals...")
+        } else if (state.goals.isEmpty()) {
             Text("Create a savings goal first.")
         } else {
             Text(
@@ -99,34 +105,52 @@ fun SavingsContributionsScreen(
                         style = MaterialTheme.typography.titleLarge
                     )
 
+                    Spacer(modifier = Modifier.height(8.dp))
+
                     Text(
                         text = "Target: ${goal.currency} ${
-                            "%.2f".format(goal.targetAmount)
+                            formatAmount(goal.targetAmount)
                         }"
                     )
 
                     Text(
                         text = "Total saved: ${goal.currency} ${
-                            "%.2f".format(state.totalSaved)
+                            formatAmount(state.totalSaved)
                         }"
                     )
 
                     Text(
                         text = "Remaining: ${goal.currency} ${
-                            "%.2f".format(state.remainingAmount)
+                            formatAmount(state.remainingAmount)
                         }"
                     )
 
                     Spacer(modifier = Modifier.height(8.dp))
 
                     LinearProgressIndicator(
-                        progress = state.progress,
+                        progress = { state.progress },
                         modifier = Modifier.fillMaxWidth()
                     )
 
-                    Text("${(state.progress * 100).toInt()}% completed")
+                    Text(
+                        text = "${(state.progress * 100).toInt()}% completed"
+                    )
 
                     Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(
+                        text = "Required monthly saving: ${goal.currency} ${
+                            formatAmount(state.requiredMonthlySaving)
+                        }",
+                        style = MaterialTheme.typography.titleMedium
+                    )
+
+                    Text(
+                        text = "Months remaining: ${state.monthsLeft}",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
 
                     Button(
                         onClick = {
@@ -152,23 +176,27 @@ fun SavingsContributionsScreen(
             )
 
             if (state.contributions.isEmpty()) {
+                Spacer(modifier = Modifier.height(8.dp))
                 Text("No contributions yet.")
             } else {
                 LazyColumn(
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier
+                        .weight(1f, fill = true),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     items(
-                        state.contributions,
+                        items = state.contributions,
                         key = { it.id }
                     ) { contribution ->
-                        Card(modifier = Modifier.fillMaxWidth()) {
+                        Card(
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
                             Column(
                                 modifier = Modifier.padding(12.dp)
                             ) {
                                 Text(
                                     text = "${goal.currency} ${
-                                        "%.2f".format(contribution.amount)
+                                        formatAmount(contribution.amount)
                                     }",
                                     style = MaterialTheme.typography.titleMedium
                                 )
@@ -186,7 +214,8 @@ fun SavingsContributionsScreen(
                                     TextButton(
                                         onClick = {
                                             editing = contribution
-                                            amount = contribution.amount.toString()
+                                            amount =
+                                                contribution.amount.toString()
                                             date = contribution.date
                                             note = contribution.note
                                             viewModel.clearMessages()
@@ -204,7 +233,7 @@ fun SavingsContributionsScreen(
                                         }
                                     ) {
                                         Text(
-                                            "Delete",
+                                            text = "Delete",
                                             color = MaterialTheme.colorScheme.error
                                         )
                                     }
@@ -216,16 +245,18 @@ fun SavingsContributionsScreen(
             }
         }
 
-        state.error?.let {
+        state.error?.let { error ->
+            Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = it,
+                text = error,
                 color = MaterialTheme.colorScheme.error
             )
         }
 
-        state.message?.let {
+        state.message?.let { message ->
+            Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = it,
+                text = message,
                 color = MaterialTheme.colorScheme.primary
             )
         }
@@ -281,7 +312,9 @@ fun SavingsContributionsScreen(
                         showDialog = false
                     }
                 ) {
-                    Text(if (state.isSaving) "Saving..." else "Save")
+                    Text(
+                        if (state.isSaving) "Saving..." else "Save"
+                    )
                 }
             },
             dismissButton = {
@@ -293,4 +326,8 @@ fun SavingsContributionsScreen(
             }
         )
     }
+}
+
+private fun formatAmount(amount: Double): String {
+    return String.format(Locale.US, "%,.2f", amount)
 }

@@ -1,3 +1,4 @@
+
 package com.example.clearledger.ui.goals
 
 import androidx.lifecycle.ViewModel
@@ -23,8 +24,9 @@ class SavingsContributionsViewModel @Inject constructor(
     private val contributionRepository: SavingsContributionRepository
 ) : ViewModel() {
 
-    private val _uiState =
-        MutableStateFlow(SavingsContributionsUiState())
+    private val _uiState = MutableStateFlow(
+        SavingsContributionsUiState()
+    )
 
     val uiState: StateFlow<SavingsContributionsUiState> =
         _uiState.asStateFlow()
@@ -42,27 +44,35 @@ class SavingsContributionsViewModel @Inject constructor(
                     _uiState.update {
                         it.copy(
                             isLoading = false,
-                            error = error.message ?: "Could not load goals."
+                            error = error.message
+                                ?: "Could not load savings goals."
                         )
                     }
                 }
                 .collect { goals ->
-                    val currentId = _uiState.value.selectedGoal?.id
-                    val selected = goals.firstOrNull { it.id == currentId }
-                        ?: goals.firstOrNull()
+                    val previousGoalId =
+                        _uiState.value.selectedGoal?.id
+
+                    val selectedGoal = goals.firstOrNull {
+                        it.id == previousGoalId
+                    } ?: goals.firstOrNull()
 
                     _uiState.update {
                         it.copy(
                             goals = goals,
-                            selectedGoal = selected,
-                            isLoading = false
+                            selectedGoal = selectedGoal,
+                            isLoading = false,
+                            error = null
                         )
                     }
 
-                    if (selected != null &&
-                        selected.id != currentId
-                    ) {
-                        selectGoal(selected)
+                    if (selectedGoal == null) {
+                        contributionsJob?.cancel()
+                        _uiState.update {
+                            it.copy(contributions = emptyList())
+                        }
+                    } else if (selectedGoal.id != previousGoalId) {
+                        selectGoal(selectedGoal)
                     }
                 }
         }
@@ -117,7 +127,9 @@ class SavingsContributionsViewModel @Inject constructor(
 
         if (amount == null || !amount.isFinite() || amount <= 0.0) {
             _uiState.update {
-                it.copy(error = "Enter an amount greater than zero.")
+                it.copy(
+                    error = "Enter an amount greater than zero."
+                )
             }
             return
         }
@@ -130,14 +142,20 @@ class SavingsContributionsViewModel @Inject constructor(
 
         if (!validDate) {
             _uiState.update {
-                it.copy(error = "Enter a valid date that is not in the future.")
+                it.copy(
+                    error = "Enter a valid date that is not in the future."
+                )
             }
             return
         }
 
         viewModelScope.launch {
             _uiState.update {
-                it.copy(isSaving = true, error = null, message = null)
+                it.copy(
+                    isSaving = true,
+                    error = null,
+                    message = null
+                )
             }
 
             try {
@@ -150,9 +168,13 @@ class SavingsContributionsViewModel @Inject constructor(
                 )
 
                 if (editing == null) {
-                    contributionRepository.addContribution(contribution)
+                    contributionRepository.addContribution(
+                        contribution
+                    )
                 } else {
-                    contributionRepository.updateContribution(contribution)
+                    contributionRepository.updateContribution(
+                        contribution
+                    )
                 }
 
                 _uiState.update {
@@ -162,21 +184,25 @@ class SavingsContributionsViewModel @Inject constructor(
                             "Contribution added."
                         } else {
                             "Contribution updated."
-                        }
+                        },
+                        error = null
                     )
                 }
             } catch (error: Exception) {
                 _uiState.update {
                     it.copy(
                         isSaving = false,
-                        error = error.message ?: "Could not save contribution."
+                        error = error.message
+                            ?: "Could not save contribution."
                     )
                 }
             }
         }
     }
 
-    fun deleteContribution(contribution: SavingsContribution) {
+    fun deleteContribution(
+        contribution: SavingsContribution
+    ) {
         viewModelScope.launch {
             try {
                 contributionRepository.deleteContribution(
@@ -193,7 +219,8 @@ class SavingsContributionsViewModel @Inject constructor(
             } catch (error: Exception) {
                 _uiState.update {
                     it.copy(
-                        error = error.message ?: "Could not delete contribution."
+                        error = error.message
+                            ?: "Could not delete contribution."
                     )
                 }
             }
@@ -202,7 +229,10 @@ class SavingsContributionsViewModel @Inject constructor(
 
     fun clearMessages() {
         _uiState.update {
-            it.copy(error = null, message = null)
+            it.copy(
+                error = null,
+                message = null
+            )
         }
     }
 }
