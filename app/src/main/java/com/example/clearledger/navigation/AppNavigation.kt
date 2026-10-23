@@ -30,6 +30,8 @@ import com.example.clearledger.ui.income.IncomeEntriesViewModel
 import com.example.clearledger.ui.goals.CreateGoalScreen
 import com.example.clearledger.ui.goals.SavingsContributionsScreen
 import com.example.clearledger.ui.freelance.FreelanceProjectsScreen
+import com.example.clearledger.ui.crypto.CryptoScreen
+
 
 @Composable
 fun AppNavigation() {
@@ -157,7 +159,7 @@ fun AppNavigation() {
                     navController.navigate(Routes.FREELANCE_PROJECTS)
                 },
                 onCryptocurrency = {
-                    // Add the cryptocurrency route when its screen is ready.
+                    navController.navigate(Routes.CRYPTOCURRENCY)
                 },
                 onWeeklyCheckIn = {
                     // Add the weekly check-in route when its screen is ready.
@@ -200,6 +202,13 @@ fun AppNavigation() {
 
         composable(Routes.FREELANCE_PROJECTS) {
             FreelanceProjectsScreen()
+        }
+        composable(Routes.CRYPTOCURRENCY) {
+            CryptoScreen(
+                onBack = {
+                    navController.popBackStack()
+                }
+            )
         }
     }
 }
