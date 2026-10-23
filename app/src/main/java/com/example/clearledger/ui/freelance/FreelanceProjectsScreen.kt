@@ -1,22 +1,24 @@
 package com.example.clearledger.ui.freelance
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -28,42 +30,35 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.example.clearledger.core.common.FreelanceProjectValidator
 import com.example.clearledger.data.repository.FreelanceProjectRepository
 import com.example.clearledger.domain.model.FreelanceProject
-import com.example.clearledger.domain.model.FreelanceProjectValidator
-import java.util.Locale
+import java.math.BigDecimal
+import java.time.LocalDate
+
 
 @Composable
-fun FreelanceProjectsScreen(
-    modifier: Modifier = Modifier
-) {
-    val repository = remember { FreelanceProjectRepository() }
-
-    var projects by remember {
-        mutableStateOf<List<FreelanceProject>>(emptyList())
+fun FreelanceProjectsScreen() {
+    val repository = remember {
+        FreelanceProjectRepository()
     }
-    var isLoading by remember { mutableStateOf(true) }
-    var isSaving by remember { mutableStateOf(false) }
-    var showForm by remember { mutableStateOf(false) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
-    var infoMessage by remember { mutableStateOf<String?>(null) }
 
-    var projectName by remember { mutableStateOf("") }
-    var clientName by remember { mutableStateOf("") }
-    var amount by remember { mutableStateOf("") }
-    var currency by remember { mutableStateOf("LKR") }
-    var rate by remember { mutableStateOf("1.0") }
+    var projects by remember { mutableStateOf<List<FreelanceProject>>(emptyList()) }
+    var loading by remember { mutableStateOf(true) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+    var showAddDialog by remember { mutableStateOf(false) }
+    var deleteProject by remember { mutableStateOf<FreelanceProject?>(null) }
 
     DisposableEffect(repository) {
         val registration = repository.listenToProjects(
             onSuccess = { result ->
                 projects = result
-                isLoading = false
+                loading = false
                 errorMessage = null
             },
-            onError = { message ->
-                errorMessage = message
-                isLoading = false
+            onError = { error ->
+                loading = false
+                errorMessage = error
             }
         )
 
@@ -73,223 +68,217 @@ fun FreelanceProjectsScreen(
     }
 
     Column(
-        modifier = modifier
+        modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+            .padding(16.dp)
     ) {
         Text(
             text = "Freelance Projects",
             style = MaterialTheme.typography.headlineSmall
         )
 
+        Spacer(modifier = Modifier.height(8.dp))
+
         Text(
-            text = "Track your clients and agreed project payments.",
+            text = "Manage clients, project amounts and milestones.",
             style = MaterialTheme.typography.bodyMedium
         )
 
-        if (!showForm) {
-            Button(
-                onClick = {
-                    showForm = true
-                    errorMessage = null
-                    infoMessage = null
-                },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("Add Project")
-            }
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Button(
+            onClick = { showAddDialog = true },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Add Project")
         }
 
-        if (showForm) {
-            Card(modifier = Modifier.fillMaxWidth()) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp)
-                        .verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Text(
-                        text = "New Freelance Project",
-                        style = MaterialTheme.typography.titleMedium
+        Spacer(modifier = Modifier.height(12.dp))
+
+        errorMessage?.let { message ->
+            Text(
+                text = message,
+                color = MaterialTheme.colorScheme.error
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+        }
+
+        if (loading) {
+            CircularProgressIndicator()
+        } else if (projects.isEmpty()) {
+            Text("No freelance projects yet. Add your first project.")
+        } else {
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                items(
+                    items = projects,
+                    key = { it.id }
+                ) { project ->
+                    FreelanceProjectCard(
+                        project = project,
+                        onDelete = { deleteProject = project }
                     )
-
-                    OutlinedTextField(
-                        value = projectName,
-                        onValueChange = { projectName = it },
-                        label = { Text("Project name") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
-
-                    OutlinedTextField(
-                        value = clientName,
-                        onValueChange = { clientName = it },
-                        label = { Text("Client name") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
-
-                    OutlinedTextField(
-                        value = amount,
-                        onValueChange = { amount = it },
-                        label = { Text("Agreed amount") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
-
-                    OutlinedTextField(
-                        value = currency,
-                        onValueChange = {
-                            currency = it.uppercase()
-                            if (currency == "LKR") {
-                                rate = "1.0"
-                            }
-                        },
-                        label = { Text("Currency (e.g. LKR, USD)") },
-                        supportingText = {
-                            Text("Supported: LKR, USD, EUR, GBP, AUD, INR")
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
-
-                    OutlinedTextField(
-                        value = rate,
-                        onValueChange = { rate = it },
-                        label = { Text("Exchange rate to LKR") },
-                        supportingText = {
-                            Text("For LKR, enter 1.0.")
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
-
-                    if (errorMessage != null) {
-                        Text(
-                            text = errorMessage.orEmpty(),
-                            color = MaterialTheme.colorScheme.error,
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                    }
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End
-                    ) {
-                        TextButton(
-                            onClick = {
-                                showForm = false
-                                errorMessage = null
-                            },
-                            enabled = !isSaving
-                        ) {
-                            Text("Cancel")
-                        }
-
-                        Button(
-                            onClick = {
-                                val validationError =
-                                    FreelanceProjectValidator.validate(
-                                        name = projectName,
-                                        client = clientName,
-                                        agreedAmount = amount,
-                                        currency = currency,
-                                        rate = rate
-                                    )
-
-                                if (validationError != null) {
-                                    errorMessage = validationError
-                                    return@Button
-                                }
-
-                                isSaving = true
-                                errorMessage = null
-                                infoMessage = null
-
-                                repository.addProject(
-                                    name = projectName,
-                                    client = clientName,
-                                    agreedAmount = amount.toDouble(),
-                                    currency = currency.trim().uppercase(),
-                                    rate = rate.toDouble(),
-                                    onSuccess = {
-                                        isSaving = false
-                                        showForm = false
-                                        projectName = ""
-                                        clientName = ""
-                                        amount = ""
-                                        currency = "LKR"
-                                        rate = "1.0"
-                                        infoMessage = "Project saved successfully."
-                                    },
-                                    onError = { message ->
-                                        isSaving = false
-                                        errorMessage = message
-                                    }
-                                )
-                            },
-                            enabled = !isSaving
-                        ) {
-                            Text(if (isSaving) "Saving..." else "Save Project")
-                        }
-                    }
                 }
             }
         }
+    }
 
-        if (infoMessage != null) {
-            Text(
-                text = infoMessage.orEmpty(),
-                color = MaterialTheme.colorScheme.primary
-            )
-        }
+    if (showAddDialog) {
+        AddFreelanceProjectDialog(
+            onDismiss = { showAddDialog = false },
+            onSave = { name, client, amount, currency, rate, notes ->
+                val validationError = FreelanceProjectValidator.validate(
+                    name = name,
+                    client = client,
+                    agreedAmount = amount,
+                    currency = currency,
+                    rate = rate
+                )
 
-        HorizontalDivider()
+                if (validationError != null) {
+                    errorMessage = validationError
+                    return@AddFreelanceProjectDialog
+                }
 
-        Text(
-            text = "Your Projects (${projects.size})",
-            style = MaterialTheme.typography.titleMedium
-        )
+                val values = FreelanceProjectValidator.convert(
+                    agreedAmount = amount,
+                    currency = currency,
+                    rate = rate
+                )
 
-        when {
-            isLoading -> {
-                CircularProgressIndicator()
+                if (values == null) {
+                    errorMessage = "Please check the project amount and exchange rate."
+                    return@AddFreelanceProjectDialog
+                }
+
+                repository.addProject(
+                    name = name,
+                    client = client,
+                    agreedAmountMinor = values.agreedAmountMinor,
+                    currency = currency,
+                    exchangeRate = values.exchangeRate,
+                    baseAmountMinor = values.baseAmountMinor,
+                    notes = notes,
+                    onSuccess = {
+                        errorMessage = null
+                        showAddDialog = false
+                    },
+                    onError = { message ->
+                        errorMessage = message
+                    }
+                )
             }
+        )
+    }
 
-            errorMessage != null && projects.isEmpty() -> {
+    deleteProject?.let { project ->
+        AlertDialog(
+            onDismissRequest = { deleteProject = null },
+            title = { Text("Delete project?") },
+            text = {
+                Text("Are you sure you want to delete ${project.name}?")
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        repository.deleteProject(
+                            projectId = project.id,
+                            onSuccess = {
+                                deleteProject = null
+                                errorMessage = null
+                            },
+                            onError = { message ->
+                                errorMessage = message
+                                deleteProject = null
+                            }
+                        )
+                    }
+                ) {
+                    Text("Delete")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { deleteProject = null }
+                ) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+}
+
+@Composable
+private fun FreelanceProjectCard(
+    project: FreelanceProject,
+    onDelete: () -> Unit
+) {
+    val today = LocalDate.now().toString()
+    val overdueCount = project.milestones.count { it.isOverdue(today) }
+
+    Card(
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
+            Text(
+                text = project.name,
+                style = MaterialTheme.typography.titleMedium
+            )
+
+            Text("Client: ${project.client}")
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            Text(
+                "Agreed amount: ${
+                    formatMinorAmount(project.agreedAmountMinor)
+                } ${project.currency}"
+            )
+
+            Text(
+                "Base amount (LKR): ${
+                    formatMinorAmount(project.baseAmountMinor)
+                }"
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text("Progress: ${(project.progress * 100).toInt()}%")
+
+            androidx.compose.material3.LinearProgressIndicator(
+                progress = { project.progress },
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Text(
+                "Milestones completed: ${
+                    project.milestones.count {
+                        it.status == "Completed"
+                    }
+                } / ${project.milestones.size}"
+            )
+
+            if (overdueCount > 0) {
                 Text(
-                    text = errorMessage.orEmpty(),
+                    text = "Overdue milestones: $overdueCount",
                     color = MaterialTheme.colorScheme.error
                 )
             }
 
-            projects.isEmpty() -> {
-                Spacer(modifier = Modifier.height(12.dp))
-
-                Text(
-                    text = "No freelance projects yet.",
-                    style = MaterialTheme.typography.titleSmall
-                )
-
-                Text(
-                    text = "Select Add Project to record your first client project.",
-                    style = MaterialTheme.typography.bodyMedium
-                )
+            if (project.notes.isNotBlank()) {
+                Spacer(modifier = Modifier.height(6.dp))
+                Text("Notes: ${project.notes}")
             }
 
-            else -> {
-                LazyColumn(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    items(
-                        items = projects,
-                        key = { it.id }
-                    ) { project ->
-                        FreelanceProjectCard(project = project)
-                    }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End
+            ) {
+                TextButton(onClick = onDelete) {
+                    Text("Delete")
                 }
             }
         }
@@ -297,43 +286,168 @@ fun FreelanceProjectsScreen(
 }
 
 @Composable
-private fun FreelanceProjectCard(
-    project: FreelanceProject
+private fun AddFreelanceProjectDialog(
+    onDismiss: () -> Unit,
+    onSave: (
+        name: String,
+        client: String,
+        amount: String,
+        currency: String,
+        rate: String,
+        notes: String
+    ) -> Unit
 ) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            Text(
-                text = project.name,
-                style = MaterialTheme.typography.titleMedium
-            )
+    var name by remember { mutableStateOf("") }
+    var client by remember { mutableStateOf("") }
+    var amount by remember { mutableStateOf("") }
+    var currency by remember { mutableStateOf("LKR") }
+    var rate by remember { mutableStateOf("1") }
+    var notes by remember { mutableStateOf("") }
+    var currencyMenuExpanded by remember { mutableStateOf(false) }
+    var validationError by remember { mutableStateOf<String?>(null) }
 
-            Text(
-                text = "Client: ${project.client}",
-                style = MaterialTheme.typography.bodyMedium
-            )
-
-            Text(
-                text = "Agreed amount: ${
-                    String.format(
-                        Locale.US,
-                        "%,.2f",
-                        project.agreedAmount
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Add Freelance Project") },
+        text = {
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                item {
+                    OutlinedTextField(
+                        value = name,
+                        onValueChange = { name = it },
+                        label = { Text("Project name") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
                     )
-                } ${project.currency}",
-                style = MaterialTheme.typography.bodyLarge
-            )
+                }
 
-            Text(
-                text = "Exchange rate to LKR: ${
-                    String.format(Locale.US, "%,.4f", project.rate)
-                }",
-                style = MaterialTheme.typography.bodySmall
-            )
+                item {
+                    OutlinedTextField(
+                        value = client,
+                        onValueChange = { client = it },
+                        label = { Text("Client name") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+
+                item {
+                    OutlinedTextField(
+                        value = amount,
+                        onValueChange = { amount = it },
+                        label = { Text("Agreed amount") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+
+                item {
+                    Column {
+                        OutlinedButton(
+                            onClick = {
+                                currencyMenuExpanded = true
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Currency: $currency")
+                        }
+
+                        DropdownMenu(
+                            expanded = currencyMenuExpanded,
+                            onDismissRequest = {
+                                currencyMenuExpanded = false
+                            }
+                        ) {
+                            listOf("LKR", "USD", "EUR", "GBP", "AUD", "INR")
+                                .forEach { option ->
+                                    DropdownMenuItem(
+                                        text = { Text(option) },
+                                        onClick = {
+                                            currency = option
+                                            if (option == "LKR") {
+                                                rate = "1"
+                                            }
+                                            currencyMenuExpanded = false
+                                        }
+                                    )
+                                }
+                        }
+                    }
+                }
+
+                item {
+                    OutlinedTextField(
+                        value = rate,
+                        onValueChange = { rate = it },
+                        label = {
+                            Text("Exchange rate to LKR")
+                        },
+                        enabled = currency != "LKR",
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+
+                item {
+                    OutlinedTextField(
+                        value = notes,
+                        onValueChange = { notes = it },
+                        label = { Text("Notes (optional)") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+
+                item {
+                    validationError?.let { message ->
+                        Text(
+                            text = message,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val error = FreelanceProjectValidator.validate(
+                        name = name,
+                        client = client,
+                        agreedAmount = amount,
+                        currency = currency,
+                        rate = rate
+                    )
+
+                    if (error != null) {
+                        validationError = error
+                    } else {
+                        onSave(
+                            name,
+                            client,
+                            amount,
+                            currency,
+                            rate,
+                            notes
+                        )
+                    }
+                }
+            ) {
+                Text("Save")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
         }
-    }
+    )
 }
+
+private fun formatMinorAmount(amountMinor: Long): String {
+    return BigDecimal.valueOf(amountMinor, 2)
+        .setScale(2, java.math.RoundingMode.HALF_UP)
+        .toPlainString()
+}
+ // thisanth
