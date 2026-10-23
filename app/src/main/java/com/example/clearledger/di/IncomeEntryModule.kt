@@ -23,7 +23,8 @@ object IncomeEntryModule {
     ): IncomeEntryRepository {
         return FirestoreIncomeEntryRepository(
             auth = auth,
-            firestore = firestore
+            db = firestore
         )
     }
 }
+// thisanth

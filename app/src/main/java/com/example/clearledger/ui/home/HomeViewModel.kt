@@ -1,11 +1,11 @@
+
 package com.example.clearledger.ui.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.clearledger.core.common.Result
-import com.example.clearledger.domain.repository.AuthRepository
 import com.example.clearledger.data.repository.IncomeEntryRepository
-import com.example.clearledger.domain.model.IncomeEntry
+import com.example.clearledger.domain.repository.AuthRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -14,7 +14,6 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.launch
 import java.time.YearMonth
 
@@ -42,21 +41,18 @@ class HomeViewModel @Inject constructor(
     }
 
     fun loadIncomeSummary() {
-        viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true, error = null)
+        _uiState.value = _uiState.value.copy(
+            isLoading = true,
+            error = null
+        )
 
-            incomeEntryRepository.getIncomeEntries()
-                .catch { throwable ->
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        error = throwable.message ?: "Unable to load income."
-                    )
-                }
-                .collect { entries ->
+        incomeEntryRepository.loadEntries { result ->
+            result.fold(
+                onSuccess = { entries ->
                     val currentMonth = YearMonth.now().toString()
 
-                    val monthlyEntries = entries.filter {
-                        it.monthKey == currentMonth
+                    val monthlyEntries = entries.filter { entry ->
+                        entry.monthKey == currentMonth
                     }
 
                     _uiState.value = HomeUiState(
@@ -66,9 +62,18 @@ class HomeViewModel @Inject constructor(
                             .sumOf { it.baseAmountMinor },
                         expectedIncomeMinor = monthlyEntries
                             .filter { it.status == "EXPECTED" }
-                            .sumOf { it.baseAmountMinor }
+                            .sumOf { it.baseAmountMinor },
+                        error = null
+                    )
+                },
+                onFailure = { error ->
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        error = error.message
+                            ?: "Unable to load income."
                     )
                 }
+            )
         }
     }
 

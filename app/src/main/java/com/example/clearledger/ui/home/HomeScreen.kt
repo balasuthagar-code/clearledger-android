@@ -21,7 +21,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.example.clearledger.core.common.IncomeEntryValidator
+import java.text.NumberFormat
+import java.util.Locale
 
 @Composable
 fun HomeScreen(
@@ -80,17 +81,13 @@ fun HomeScreen(
                 } else {
                     Text(
                         text = "Received: LKR ${
-                            IncomeEntryValidator.formatAmount(
-                                state.receivedIncomeMinor
-                            )
+                            formatIncomeAmount(state.receivedIncomeMinor)
                         }"
                     )
 
                     Text(
                         text = "Expected: LKR ${
-                            IncomeEntryValidator.formatAmount(
-                                state.expectedIncomeMinor
-                            )
+                            formatIncomeAmount(state.expectedIncomeMinor)
                         }"
                     )
 
@@ -160,6 +157,15 @@ fun HomeScreen(
             onClick = onLogout
         )
     }
+}
+
+private fun formatIncomeAmount(amountMinor: Long): String {
+    val amount = amountMinor / 100.0
+
+    return NumberFormat.getNumberInstance(Locale.US).apply {
+        minimumFractionDigits = 2
+        maximumFractionDigits = 2
+    }.format(amount)
 }
 
 @Composable

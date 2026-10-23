@@ -22,8 +22,7 @@ import com.example.clearledger.ui.auth.SplashState
 import com.example.clearledger.ui.auth.SplashViewModel
 import com.example.clearledger.ui.home.HomeScreen
 import com.example.clearledger.ui.home.HomeViewModel
-//import com.example.clearledger.ui.income.IncomeEntriesScreen
-//import com.example.clearledger.ui.income.IncomeEntriesViewModel
+
 import com.example.clearledger.ui.income.IncomeSourcesScreen
 import com.example.clearledger.ui.goals.CreateGoalScreen
 import com.example.clearledger.ui.goals.SavingsContributionsScreen
@@ -33,6 +32,10 @@ import androidx.navigation.compose.composable
 import com.example.clearledger.ui.income.IncomeSourcesScreen
 import com.example.clearledger.ui.income.IncomeSourcesViewModel
 
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.compose.composable
+import com.example.clearledger.ui.income.IncomeEntriesScreen
+import com.example.clearledger.ui.income.IncomeEntriesViewModel
 @Composable
 fun AppNavigation() {
     val navController = rememberNavController()
@@ -183,14 +186,24 @@ fun AppNavigation() {
             SavingsContributionsScreen()
         }
 
-//
-    //        composable("income_sources") {
-//            IncomeSourcesScreen(
-//                onBack = {
-//                    navController.popBackStack()
-//                }
-//            )
-//
-//        }
+        composable("income_sources") {
+            val viewModel: IncomeSourcesViewModel = viewModel()
+
+            IncomeSourcesScreen(
+                viewModel = viewModel,
+                onBack = { navController.popBackStack() }
+            )
+        }
+        composable("income_entries") {
+            val viewModel: IncomeEntriesViewModel = viewModel()
+
+            IncomeEntriesScreen(
+                viewModel = viewModel,
+                onBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
     }
 }
+// thisanth

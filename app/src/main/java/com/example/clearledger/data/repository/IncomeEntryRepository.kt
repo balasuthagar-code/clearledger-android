@@ -2,15 +2,26 @@
 package com.example.clearledger.data.repository
 
 import com.example.clearledger.domain.model.IncomeEntry
-import kotlinx.coroutines.flow.Flow
+import com.example.clearledger.domain.model.IncomeSource
 
 interface IncomeEntryRepository {
-    fun getIncomeEntries(): Flow<List<IncomeEntry>>
 
-    suspend fun addIncomeEntry(entry: IncomeEntry)
+    fun loadSources(
+        callback: (Result<List<IncomeSource>>) -> Unit
+    )
 
-    suspend fun updateIncomeEntry(entry: IncomeEntry)
+    fun loadEntries(
+        callback: (Result<List<IncomeEntry>>) -> Unit
+    )
 
-    suspend fun deleteIncomeEntry(entryId: String)
+    fun saveEntry(
+        entry: IncomeEntry,
+        callback: (Result<Unit>) -> Unit
+    )
+
+    fun deleteEntry(
+        entryId: String,
+        callback: (Result<Unit>) -> Unit
+    )
 }
 // thisanth
