@@ -1,176 +1,172 @@
-package com.example.clearledger.ui.income
-
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
-import com.example.clearledger.core.common.IncomeEntryValidator
-import com.example.clearledger.data.repository.IncomeEntryRepository
-import com.example.clearledger.data.repository.IncomeSourceRepository
-import com.example.clearledger.domain.model.IncomeEntry
-import com.example.clearledger.domain.model.IncomeSource
-import dagger.hilt.android.lifecycle.HiltViewModel
-import javax.inject.Inject
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.launch
-
-@HiltViewModel
-class IncomeEntriesViewModel @Inject constructor(
-    private val entryRepository: IncomeEntryRepository,
-    private val sourceRepository: IncomeSourceRepository
-) : ViewModel() {
-
-    private val selectedMonth = MutableStateFlow("")
-    private val selectedSourceId = MutableStateFlow("")
-
-    private val _uiState = MutableStateFlow(IncomeEntriesUiState())
-    val uiState: StateFlow<IncomeEntriesUiState> = _uiState.asStateFlow()
-
-    init {
-        observeData()
-    }
-
-    private fun observeData() {
-        viewModelScope.launch {
-            combine(
-                entryRepository.getIncomeEntries(),
-                sourceRepository.getIncomeSources(),
-                selectedMonth,
-                selectedSourceId
-            ) { entries, sources, month, sourceId ->
-
-                val filteredEntries = entries.filter { entry ->
-                    (month.isBlank() || entry.monthKey == month) &&
-                            (sourceId.isBlank() || entry.sourceId == sourceId)
-                }
-
-                IncomeEntriesUiState(
-                    entries = filteredEntries,
-                    sources = sources,
-                    isLoading = false,
-                    selectedMonth = month,
-                    selectedSourceId = sourceId,
-                    error = _uiState.value.error
-                )
-            }
-                .catch { error ->
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        error = error.message ?: "Unable to load income entries"
-                    )
-                }
-                .collect { state ->
-                    _uiState.value = state
-                }
-        }
-    }
-
-    fun filterByMonth(month: String) {
-        selectedMonth.value = month.trim()
-    }
-
-    fun filterBySource(sourceId: String) {
-        selectedSourceId.value = sourceId
-    }
-
-    fun clearError() {
-        _uiState.value = _uiState.value.copy(error = null)
-    }
-
-    fun saveIncomeEntry(
-        entryId: String? = null,
-        sourceId: String,
-        amount: String,
-        currency: String,
-        exchangeRate: String,
-        date: String,
-        note: String,
-        status: String
-    ) {
-        viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(
-                isSaving = true,
-                error = null
-            )
-
-            try {
-                val source = _uiState.value.sources.firstOrNull {
-                    it.id == sourceId && it.active
-                } ?: throw IllegalArgumentException(
-                    "Please select an active income source"
-                )
-
-                if (currency !in IncomeEntryValidator.supportedCurrencies) {
-                    throw IllegalArgumentException("Select a supported currency")
-                }
-
-                if (status !in IncomeEntryValidator.statuses) {
-                    throw IllegalArgumentException("Select a valid income status")
-                }
-
-                if (!IncomeEntryValidator.isValidDate(date)) {
-                    throw IllegalArgumentException(
-                        "Enter a valid date in YYYY-MM-DD format"
-                    )
-                }
-
-                val amountMinor =
-                    IncomeEntryValidator.parseAmountToMinorUnits(amount)
-                        ?: throw IllegalArgumentException(
-                            "Enter an amount greater than zero"
-                        )
-
-                val rate = if (currency == "LKR") "1" else exchangeRate
-
-                val baseAmountMinor =
-                    IncomeEntryValidator.calculateBaseAmount(
-                        amountMinor,
-                        rate
-                    ) ?: throw IllegalArgumentException(
-                        "Enter a valid exchange rate greater than zero"
-                    )
-
-                val entry = IncomeEntry(
-                    id = entryId.orEmpty(),
-                    sourceId = source.id,
-                    sourceName = source.name,
-                    originalAmountMinor = amountMinor,
-                    currency = currency,
-                    exchangeRate = rate,
-                    baseAmountMinor = baseAmountMinor,
-                    date = date.trim(),
-                    monthKey = IncomeEntryValidator.monthKey(date.trim()),
-                    note = note.trim(),
-                    status = status
-                )
-
-                if (entryId.isNullOrBlank()) {
-                    entryRepository.addIncomeEntry(entry)
-                } else {
-                    entryRepository.updateIncomeEntry(entry)
-                }
-            } catch (error: Exception) {
-                _uiState.value = _uiState.value.copy(
-                    error = error.message ?: "Unable to save income"
-                )
-            } finally {
-                _uiState.value = _uiState.value.copy(isSaving = false)
-            }
-        }
-    }
-
-    fun deleteIncomeEntry(entryId: String) {
-        viewModelScope.launch {
-            try {
-                entryRepository.deleteIncomeEntry(entryId)
-                _uiState.value = _uiState.value.copy(error = null)
-            } catch (error: Exception) {
-                _uiState.value = _uiState.value.copy(
-                    error = error.message ?: "Unable to delete income"
-                )
-            }
-        }
-    }
-}
+//
+//package com.example.clearledger.ui.income
+//
+//import androidx.compose.runtime.getValue
+//import androidx.compose.runtime.mutableStateOf
+//import androidx.compose.runtime.setValue
+//import androidx.lifecycle.ViewModel
+//import com.example.clearledger.core.common.IncomeEntryValidator
+//import com.example.clearledger.data.repository.FirestoreIncomeEntryRepository
+//import com.example.clearledger.domain.model.IncomeEntry
+//import com.example.clearledger.domain.model.IncomeSource
+//import java.math.BigDecimal
+//import java.time.LocalDate
+//
+//
+//class IncomeEntriesViewModel(
+//    private val repository: FirestoreIncomeEntryRepository =
+//        FirestoreIncomeEntryRepository()
+//) : ViewModel() {
+//
+//    var state by mutableStateOf(IncomeEntriesUiState())
+//        private set
+//
+//    init {
+//        refresh()
+//    }
+//
+//    fun refresh() {
+//        state = state.copy(isLoading = true, error = null)
+//
+//        repository.loadSources { result ->
+//            result.fold(
+//                onSuccess = { sources ->
+//                    state = state.copy(sources = sources)
+//                },
+//                onFailure = {
+//                    state = state.copy(
+//                        error = it.message ?: "Could not load income sources."
+//                    )
+//                }
+//            )
+//
+//            repository.loadEntries { entryResult ->
+//                entryResult.fold(
+//                    onSuccess = { entries ->
+//                        state = state.copy(
+//                            entries = entries,
+//                            isLoading = false
+//                        )
+//                    },
+//                    onFailure = {
+//                        state = state.copy(
+//                            isLoading = false,
+//                            error = it.message ?: "Could not load income entries."
+//                        )
+//                    }
+//                )
+//            }
+//        }
+//    }
+//
+//    fun saveEntry(
+//        existing: IncomeEntry?,
+//        sourceId: String,
+//        amountText: String,
+//        currency: String,
+//        rateText: String,
+//        date: String,
+//        note: String,
+//        status: String
+//    ) {
+//        val amountMinor = try {
+//            BigDecimal(amountText.trim())
+//                .movePointRight(2)
+//                .longValueExact()
+//        } catch (_: Exception) {
+//            null
+//        }
+//
+//        if (amountMinor == null || amountMinor <= 0L) {
+//            state = state.copy(
+//                error = "Enter a valid amount greater than zero.",
+//                message = null
+//            )
+//            return
+//        }
+//
+//        val rate = if (currency == "LKR") "1" else rateText.trim()
+//
+//        val entry = IncomeEntry(
+//            id = existing?.id ?: "",
+//            sourceId = sourceId,
+//            originalAmountMinor = amountMinor,
+//            originalCurrency = currency,
+//            exchangeRate = rate,
+//            baseAmountMinor = try {
+//                IncomeEntryValidator.calculateBaseAmountMinor(amountMinor, rate)
+//            } catch (_: Exception) {
+//                state = state.copy(
+//                    error = "Enter a valid positive exchange rate.",
+//                    message = null
+//                )
+//                return
+//            },
+//            date = date.trim(),
+//            monthKey = try {
+//                IncomeEntryValidator.monthKey(date.trim())
+//            } catch (_: Exception) {
+//                ""
+//            },
+//            status = status,
+//            note = note.trim(),
+//            createdAt = existing?.createdAt ?: 0L,
+//            updatedAt = System.currentTimeMillis()
+//        )
+//
+//        val validationError = IncomeEntryValidator.validate(entry)
+//        if (validationError != null) {
+//            state = state.copy(error = validationError, message = null)
+//            return
+//        }
+//
+//        state = state.copy(isSaving = true, error = null, message = null)
+//
+//        repository.saveEntry(entry) { result ->
+//            result.fold(
+//                onSuccess = {
+//                    state = state.copy(
+//                        isSaving = false,
+//                        message = if (existing == null) {
+//                            "Income entry saved."
+//                        } else {
+//                            "Income entry updated."
+//                        },
+//                        error = null
+//                    )
+//                    refresh()
+//                },
+//                onFailure = {
+//                    state = state.copy(
+//                        isSaving = false,
+//                        error = it.message ?: "Could not save the income entry."
+//                    )
+//                }
+//            )
+//        }
+//    }
+//
+//    fun deleteEntry(entryId: String) {
+//        repository.deleteEntry(entryId) { result ->
+//            result.fold(
+//                onSuccess = {
+//                    state = state.copy(
+//                        message = "Income entry deleted.",
+//                        error = null
+//                    )
+//                    refresh()
+//                },
+//                onFailure = {
+//                    state = state.copy(
+//                        error = it.message ?: "Could not delete the entry.",
+//                        message = null
+//                    )
+//                }
+//            )
+//        }
+//    }
+//
+//    fun clearMessages() {
+//        state = state.copy(error = null, message = null)
+//    }
+//}

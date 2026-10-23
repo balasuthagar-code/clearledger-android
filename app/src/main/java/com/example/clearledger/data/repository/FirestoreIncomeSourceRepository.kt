@@ -1,99 +1,214 @@
+
 package com.example.clearledger.data.repository
 
 import com.example.clearledger.domain.model.IncomeSource
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
-import kotlinx.coroutines.channels.awaitClose
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.callbackFlow
-import kotlinx.coroutines.tasks.await
-import javax.inject.Inject
-import javax.inject.Singleton
 
-@Singleton
-class FirestoreIncomeSourceRepository @Inject constructor(
-    private val auth: FirebaseAuth,
-    private val firestore: FirebaseFirestore
-) : IncomeSourceRepository {
+data class IncomeSourceSummary(
+    val source: IncomeSource,
+    val total: Double = 0.0,
+    val entryCount: Int = 0,
+    val amountEntryCount: Int = 0
+)
 
-    private fun incomeSourcesCollection() =
-        firestore.collection("users")
-            .document(
-                auth.currentUser?.uid
-                    ?: throw IllegalStateException("User is not logged in.")
-            )
-            .collection("incomeSources")
+class FirestoreIncomeSourceRepository(
+    private val auth: FirebaseAuth = FirebaseAuth.getInstance(),
+    private val db: FirebaseFirestore = FirebaseFirestore.getInstance()
+) {
+    private fun uid(): String? = auth.currentUser?.uid
 
-    override fun getIncomeSources(): Flow<List<IncomeSource>> = callbackFlow {
-        val uid = auth.currentUser?.uid
-
-        if (uid == null) {
-            close(IllegalStateException("User is not logged in."))
-            return@callbackFlow
+    private fun sources() =
+        uid()?.let {
+            db.collection("users").document(it)
+                .collection("incomeSources")
         }
 
-        val listener = firestore.collection("users")
-            .document(uid)
-            .collection("incomeSources")
-            .addSnapshotListener { snapshot, error ->
+    private fun entries() =
+        uid()?.let {
+            db.collection("users").document(it)
+                .collection("incomeEntries")
+        }
 
-                if (error != null) {
-                    close(error)
-                    return@addSnapshotListener
+    fun loadSources(
+        callback: (kotlin.Result<List<IncomeSourceSummary>>) -> Unit
+    ) {
+        val userId = uid()
+        val sourceCollection = sources()
+        val entryCollection = entries()
+
+        if (userId == null || sourceCollection == null || entryCollection == null) {
+            callback(Result.failure(Exception("Please sign in first.")))
+            return
+        }
+
+        sourceCollection.get()
+            .addOnSuccessListener { sourceSnapshot ->
+                val sourceList = sourceSnapshot.documents.map { doc ->
+                    IncomeSource(
+                        id = doc.id,
+                        userId = doc.getString("userId") ?: userId,
+                        name = doc.getString("name") ?: "",
+                        type = doc.getString("type") ?: "OTHER",
+                        customType = doc.getString("customType") ?: "",
+                        defaultCurrency =
+                            doc.getString("defaultCurrency") ?: "LKR",
+                        isActive = doc.getBoolean("isActive") ?: true,
+                        createdAt = doc.getLong("createdAt") ?: 0L,
+                        updatedAt = doc.getLong("updatedAt") ?: 0L
+                    )
                 }
 
-                if (snapshot != null) {
-                    val sources = snapshot.documents.mapNotNull { document ->
-                        document.toObject(IncomeSource::class.java)
-                            ?.copy(id = document.id)
+                entryCollection.get()
+                    .addOnSuccessListener { entrySnapshot ->
+                        val summaries = sourceList.map { source ->
+                            val linkedEntries = entrySnapshot.documents.filter {
+                                it.getString("sourceId") == source.id
+                            }
+
+                            val matchingAmounts = linkedEntries.mapNotNull { entry ->
+                                val currency =
+                                    entry.getString("currency")
+                                        ?: source.defaultCurrency
+
+                                val amount = (entry.get("amount") as? Number)
+                                    ?.toDouble()
+
+                                if (
+                                    currency == source.defaultCurrency &&
+                                    amount != null
+                                ) {
+                                    amount
+                                } else {
+                                    null
+                                }
+                            }
+
+                            IncomeSourceSummary(
+                                source = source,
+                                total = matchingAmounts.sum(),
+                                entryCount = linkedEntries.size,
+                                amountEntryCount = matchingAmounts.size
+                            )
+                        }
+
+                        callback(Result.success(summaries))
                     }
-
-                    trySend(sources)
-                }
+                    .addOnFailureListener {
+                        callback(Result.failure(it))
+                    }
             }
+            .addOnFailureListener {
+                callback(Result.failure(it))
+            }
+    }
 
-        awaitClose {
-            listener.remove()
+    fun saveSource(
+        source: IncomeSource,
+        callback: (kotlin.Result<Unit>) -> Unit
+    ) {
+        val userId = uid()
+        val collection = sources()
+
+        if (userId == null || collection == null) {
+            callback(Result.failure(Exception("Please sign in first.")))
+            return
+        }
+
+        val now = System.currentTimeMillis()
+        val data = hashMapOf<String, Any>(
+            "userId" to userId,
+            "name" to source.name.trim(),
+            "type" to source.type,
+            "customType" to source.customType.trim(),
+            "defaultCurrency" to source.defaultCurrency,
+            "isActive" to source.isActive,
+            "updatedAt" to now
+        )
+
+        if (source.id.isBlank()) {
+            data["createdAt"] = now
+
+            collection.add(data)
+                .addOnSuccessListener {
+                    callback(Result.success(Unit))
+                }
+                .addOnFailureListener {
+                    callback(Result.failure(it))
+                }
+        } else {
+            collection.document(source.id).update(data)
+                .addOnSuccessListener {
+                    callback(Result.success(Unit))
+                }
+                .addOnFailureListener {
+                    callback(Result.failure(it))
+                }
         }
     }
 
-    override suspend fun addIncomeSource(source: IncomeSource) {
-        require(source.name.isNotBlank()) {
-            "Income source name cannot be empty."
+    fun deleteSource(
+        sourceId: String,
+        callback: (kotlin.Result<Unit>) -> Unit
+    ) {
+        val collection = sources()
+        val entryCollection = entries()
+
+        if (uid() == null || collection == null || entryCollection == null) {
+            callback(Result.failure(Exception("Please sign in first.")))
+            return
         }
 
-        val document = incomeSourcesCollection().document()
+        entryCollection.whereEqualTo("sourceId", sourceId).get()
+            .addOnSuccessListener { snapshot ->
+                if (!snapshot.isEmpty) {
+                    callback(
+                        Result.failure(
+                            Exception(
+                                "This source has income entries. " +
+                                        "Deactivate it instead to keep your history."
+                            )
+                        )
+                    )
+                    return@addOnSuccessListener
+                }
 
-        val sourceData = hashMapOf(
-            "id" to document.id,
-            "name" to source.name.trim(),
-            "type" to source.type,
-            "defaultCurrency" to source.defaultCurrency,
-            "active" to source.active
-        )
-
-        document.set(sourceData).await()
+                collection.document(sourceId).delete()
+                    .addOnSuccessListener {
+                        callback(Result.success(Unit))
+                    }
+                    .addOnFailureListener {
+                        callback(Result.failure(it))
+                    }
+            }
+            .addOnFailureListener {
+                callback(Result.failure(it))
+            }
     }
 
-    override suspend fun updateIncomeSource(source: IncomeSource) {
-        require(source.id.isNotBlank()) {
-            "Income source ID cannot be empty."
+    fun setActive(
+        sourceId: String,
+        active: Boolean,
+        callback: (kotlin.Result<Unit>) -> Unit
+    ) {
+        val collection = sources()
+
+        if (uid() == null || collection == null) {
+            callback(Result.failure(Exception("Please sign in first.")))
+            return
         }
 
-        require(source.name.isNotBlank()) {
-            "Income source name cannot be empty."
-        }
-
-        val sourceData = mapOf(
-            "name" to source.name.trim(),
-            "type" to source.type,
-            "defaultCurrency" to source.defaultCurrency,
-            "active" to source.active
+        collection.document(sourceId).update(
+            mapOf(
+                "isActive" to active,
+                "updatedAt" to System.currentTimeMillis()
+            )
         )
-
-        incomeSourcesCollection()
-            .document(source.id)
-            .update(sourceData)
-            .await()
+            .addOnSuccessListener {
+                callback(Result.success(Unit))
+            }
+            .addOnFailureListener {
+                callback(Result.failure(it))
+            }
     }
 }

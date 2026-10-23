@@ -1,68 +1,65 @@
+
 package com.example.clearledger.core.common
 
+import com.example.clearledger.domain.model.IncomeEntry
+import com.example.clearledger.domain.model.IncomeEntryOptions
 import java.math.BigDecimal
 import java.math.RoundingMode
 import java.time.LocalDate
-import java.time.YearMonth
 
 object IncomeEntryValidator {
 
-    val supportedCurrencies = listOf(
-        "LKR", "USD", "EUR", "GBP", "AUD", "INR"
-    )
+    fun validate(entry: IncomeEntry): String? {
+        if (entry.sourceId.isBlank()) {
+            return "Please select an income source."
+        }
 
-    val statuses = listOf("EXPECTED", "RECEIVED")
+        if (entry.originalAmountMinor <= 0L) {
+            return "Amount must be greater than zero."
+        }
 
-    fun parseAmountToMinorUnits(value: String): Long? {
-        return try {
-            val amount = BigDecimal(value.trim())
+        if (entry.originalCurrency !in IncomeEntryOptions.currencies) {
+            return "Please select a valid currency."
+        }
 
-            if (amount <= BigDecimal.ZERO) {
-                null
-            } else {
-                amount.multiply(BigDecimal("100"))
-                    .setScale(0, RoundingMode.HALF_UP)
-                    .longValueExact()
-            }
+        if (entry.status !in IncomeEntryOptions.statuses) {
+            return "Please select a valid income status."
+        }
+
+        val parsedDate = try {
+            LocalDate.parse(entry.date)
         } catch (_: Exception) {
             null
         }
+
+        if (parsedDate == null) {
+            return "Enter a valid date using YYYY-MM-DD."
+        }
+
+        val rate = entry.exchangeRate.toBigDecimalOrNull()
+        if (rate == null || rate <= BigDecimal.ZERO) {
+            return "Exchange rate must be greater than zero."
+        }
+
+        if (entry.originalCurrency == "LKR" && rate.compareTo(BigDecimal.ONE) != 0) {
+            return "The exchange rate for LKR must be 1."
+        }
+
+        return null
     }
 
-    fun calculateBaseAmount(
+    fun calculateBaseAmountMinor(
         originalAmountMinor: Long,
         exchangeRate: String
-    ): Long? {
-        return try {
-            val rate = BigDecimal(exchangeRate.trim())
-
-            if (originalAmountMinor <= 0L || rate <= BigDecimal.ZERO) {
-                null
-            } else {
-                BigDecimal.valueOf(originalAmountMinor)
-                    .multiply(rate)
-                    .setScale(0, RoundingMode.HALF_UP)
-                    .longValueExact()
-            }
-        } catch (_: Exception) {
-            null
-        }
-    }
-
-    fun isValidDate(value: String): Boolean {
-        return try {
-            LocalDate.parse(value.trim())
-            true
-        } catch (_: Exception) {
-            false
-        }
+    ): Long {
+        val rate = exchangeRate.toBigDecimal()
+        return BigDecimal.valueOf(originalAmountMinor)
+            .multiply(rate)
+            .setScale(0, RoundingMode.HALF_UP)
+            .longValueExact()
     }
 
     fun monthKey(date: String): String {
-        return YearMonth.from(LocalDate.parse(date)).toString()
-    }
-
-    fun formatAmount(minorUnits: Long): String {
-        return BigDecimal.valueOf(minorUnits, 2).toPlainString()
+        return LocalDate.parse(date).toString().substring(0, 7)
     }
 }

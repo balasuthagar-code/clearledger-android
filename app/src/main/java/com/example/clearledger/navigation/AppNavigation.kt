@@ -22,11 +22,16 @@ import com.example.clearledger.ui.auth.SplashState
 import com.example.clearledger.ui.auth.SplashViewModel
 import com.example.clearledger.ui.home.HomeScreen
 import com.example.clearledger.ui.home.HomeViewModel
-import com.example.clearledger.ui.income.IncomeEntriesScreen
-import com.example.clearledger.ui.income.IncomeEntriesViewModel
+//import com.example.clearledger.ui.income.IncomeEntriesScreen
+//import com.example.clearledger.ui.income.IncomeEntriesViewModel
 import com.example.clearledger.ui.income.IncomeSourcesScreen
 import com.example.clearledger.ui.goals.CreateGoalScreen
 import com.example.clearledger.ui.goals.SavingsContributionsScreen
+
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.compose.composable
+import com.example.clearledger.ui.income.IncomeSourcesScreen
+import com.example.clearledger.ui.income.IncomeSourcesViewModel
 
 @Composable
 fun AppNavigation() {
@@ -123,6 +128,7 @@ fun AppNavigation() {
         }
 
 
+
         composable(Routes.HOME) {
             val viewModel: HomeViewModel = hiltViewModel()
 
@@ -146,14 +152,27 @@ fun AppNavigation() {
                 },
                 onSavingsContributions = {
                     navController.navigate(Routes.SAVINGS_CONTRIBUTIONS)
+                },
+                onFreelanceProjects = {
+                    navController.navigate(Routes.FREELANCE_PROJECTS)
+                },
+                onCryptocurrency = {
+                    //navController.navigate(Routes.CRYPTOCURRENCY)
+                },
+                onWeeklyCheckIn = {
+                   // navController.navigate(Routes.WEEKLY_CHECK_IN)
+                },
+                onProfile = {
+                    //navController.navigate(Routes.PROFILE)
                 }
             )
         }
 
 
+
         composable(Routes.INCOME_ENTRIES) {
-            val viewModel: IncomeEntriesViewModel = hiltViewModel()
-            IncomeEntriesScreen(viewModel = viewModel)
+            //val viewModel: IncomeEntriesViewModel = hiltViewModel()
+            //IncomeEntriesScreen(viewModel = viewModel)
         }
 
         composable(Routes.SAVINGS_GOALS) {
@@ -164,8 +183,14 @@ fun AppNavigation() {
             SavingsContributionsScreen()
         }
 
-        composable(Routes.INCOME_SOURCES) {
-            IncomeSourcesScreen()
-        }
+//
+    //        composable("income_sources") {
+//            IncomeSourcesScreen(
+//                onBack = {
+//                    navController.popBackStack()
+//                }
+//            )
+//
+//        }
     }
 }

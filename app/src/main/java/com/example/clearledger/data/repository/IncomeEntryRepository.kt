@@ -5,7 +5,6 @@ import com.example.clearledger.domain.model.IncomeEntry
 import kotlinx.coroutines.flow.Flow
 
 interface IncomeEntryRepository {
-
     fun getIncomeEntries(): Flow<List<IncomeEntry>>
 
     suspend fun addIncomeEntry(entry: IncomeEntry)
@@ -14,3 +13,4 @@ interface IncomeEntryRepository {
 
     suspend fun deleteIncomeEntry(entryId: String)
 }
+// thisanth
