@@ -1,7 +1,10 @@
 package com.example.clearledger.navigation
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FloatingActionButton
@@ -12,26 +15,37 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+
 import com.example.clearledger.ui.auth.LoginScreen
 import com.example.clearledger.ui.auth.LoginViewModel
 import com.example.clearledger.ui.auth.RegisterScreen
 import com.example.clearledger.ui.auth.RegisterViewModel
 import com.example.clearledger.ui.auth.SplashState
 import com.example.clearledger.ui.auth.SplashViewModel
+
 import com.example.clearledger.ui.home.HomeScreen
 import com.example.clearledger.ui.home.HomeViewModel
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.ui.unit.dp
-import com.example.clearledger.navigation.RecurringRoutes
-import com.example.clearledger.navigation.recurringGraph
+
+import com.example.clearledger.ui.income.IncomeSourcesScreen
+import com.example.clearledger.ui.income.IncomeSourcesViewModel
+import com.example.clearledger.ui.income.IncomeEntriesScreen
+import com.example.clearledger.ui.income.IncomeEntriesViewModel
+
+import com.example.clearledger.ui.goals.CreateGoalScreen
+import com.example.clearledger.ui.goals.SavingsContributionsScreen
+import com.example.clearledger.ui.freelance.FreelanceProjectsScreen
+import com.example.clearledger.ui.crypto.CryptoScreen
+
+import com.example.clearledger.ui.weeklycheckin.WeeklyCheckInScreen
+import com.example.clearledger.ui.weeklycheckin.WeeklyCheckInViewModel
+
 @Composable
 fun AppNavigation() {
     val navController = rememberNavController()
@@ -40,8 +54,11 @@ fun AppNavigation() {
         navController = navController,
         startDestination = Routes.SPLASH
     ) {
+        // Main branch: expense and recurring features
         expenseGraph(navController)
         recurringGraph(navController)
+
+        // Splash screen
         composable(Routes.SPLASH) {
             val splashViewModel: SplashViewModel = hiltViewModel()
             val state =
@@ -85,15 +102,16 @@ fun AppNavigation() {
             }
         }
 
+        // Login
         composable(Routes.LOGIN) {
-            val viewModel: LoginViewModel = hiltViewModel()
+            val loginViewModel: LoginViewModel = hiltViewModel()
             val state =
-                viewModel.loginState.collectAsStateWithLifecycle().value
+                loginViewModel.loginState.collectAsStateWithLifecycle().value
 
             LoginScreen(
                 loginState = state,
                 onLogin = { email, password ->
-                    viewModel.login(email, password)
+                    loginViewModel.login(email, password)
                 },
                 onNavigateRegister = {
                     navController.navigate(Routes.REGISTER)
@@ -108,18 +126,19 @@ fun AppNavigation() {
             )
         }
 
+        // Registration
         composable(Routes.REGISTER) {
-            val viewModel: RegisterViewModel = hiltViewModel()
+            val registerViewModel: RegisterViewModel = hiltViewModel()
             val state =
-                viewModel.registerState.collectAsStateWithLifecycle().value
+                registerViewModel.registerState.collectAsStateWithLifecycle().value
 
             RegisterScreen(
                 registerState = state,
                 onRegister = { email, password ->
-                    viewModel.register(email, password)
+                    registerViewModel.register(email, password)
                 },
                 onRetry = {
-                    viewModel.retryProfileSetup()
+                    registerViewModel.retryProfileSetup()
                 },
                 onNavigateHome = {
                     navController.navigate(Routes.HOME) {
@@ -131,8 +150,9 @@ fun AppNavigation() {
             )
         }
 
+        // Home screen
         composable(Routes.HOME) {
-            val viewModel: HomeViewModel = hiltViewModel()
+            val homeViewModel: HomeViewModel = hiltViewModel()
 
             Scaffold(
                 floatingActionButton = {
@@ -145,12 +165,11 @@ fun AppNavigation() {
                     }
                 },
                 bottomBar = {
-                    androidx.compose.foundation.layout.Row(
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(12.dp),
-                        horizontalArrangement =
-                            androidx.compose.foundation.layout.Arrangement.Center
+                        horizontalArrangement = Arrangement.Center
                     ) {
                         TextButton(
                             onClick = {
@@ -159,6 +178,7 @@ fun AppNavigation() {
                         ) {
                             Text("All expenses")
                         }
+
                         TextButton(
                             onClick = {
                                 navController.navigate(RecurringRoutes.LIST)
@@ -168,22 +188,115 @@ fun AppNavigation() {
                         }
                     }
                 }
-            ) { padding ->
-                Box(
-                    modifier = Modifier.padding(padding)
-                ) {
-                    HomeScreen(
-                        onLogout = {
-                            viewModel.logout()
-                            navController.navigate(Routes.LOGIN) {
-                                popUpTo(Routes.HOME) {
-                                    inclusive = true
-                                }
+            ) { innerPadding ->
+                HomeScreen(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding),
+                    viewModel = homeViewModel,
+
+                    onLogout = {
+                        homeViewModel.logout()
+                        navController.navigate(Routes.LOGIN) {
+                            popUpTo(Routes.HOME) {
+                                inclusive = true
                             }
                         }
-                    )
-                }
+                    },
+
+                    onIncomeSources = {
+                        navController.navigate(Routes.INCOME_SOURCES)
+                    },
+
+                    onIncomeEntries = {
+                        navController.navigate(Routes.INCOME_ENTRIES)
+                    },
+
+                    onSavingsGoals = {
+                        navController.navigate(Routes.SAVINGS_GOALS)
+                    },
+
+                    onSavingsContributions = {
+                        navController.navigate(Routes.SAVINGS_CONTRIBUTIONS)
+                    },
+
+                    onFreelanceProjects = {
+                        navController.navigate(Routes.FREELANCE_PROJECTS)
+                    },
+
+                    onCryptocurrency = {
+                        navController.navigate(Routes.CRYPTOCURRENCY)
+                    },
+
+                    onWeeklyCheckIn = {
+                        navController.navigate(Routes.WEEKLY_CHECK_IN)
+                    },
+
+                    onProfile = {
+                        // Connect your Profile destination when available.
+                    }
+                )
             }
+        }
+
+        // Income sources
+        composable(Routes.INCOME_SOURCES) {
+            val incomeSourcesViewModel: IncomeSourcesViewModel = viewModel()
+
+            IncomeSourcesScreen(
+                viewModel = incomeSourcesViewModel,
+                onBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        // Income entries
+        composable(Routes.INCOME_ENTRIES) {
+            val incomeEntriesViewModel: IncomeEntriesViewModel = viewModel()
+
+            IncomeEntriesScreen(
+                viewModel = incomeEntriesViewModel,
+                onBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        // Savings goals
+        composable(Routes.SAVINGS_GOALS) {
+            CreateGoalScreen()
+        }
+
+        // Savings contributions
+        composable(Routes.SAVINGS_CONTRIBUTIONS) {
+            SavingsContributionsScreen()
+        }
+
+        // Freelance projects
+        composable(Routes.FREELANCE_PROJECTS) {
+            FreelanceProjectsScreen()
+        }
+
+        // Cryptocurrency
+        composable(Routes.CRYPTOCURRENCY) {
+            CryptoScreen(
+                onBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        // Weekly Check-in
+        composable(Routes.WEEKLY_CHECK_IN) {
+            val weeklyCheckInViewModel: WeeklyCheckInViewModel = hiltViewModel()
+
+            WeeklyCheckInScreen(
+                viewModel = weeklyCheckInViewModel,
+                onBack = {
+                    navController.popBackStack()
+                }
+            )
         }
     }
 }
