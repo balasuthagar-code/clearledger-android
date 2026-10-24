@@ -16,4 +16,6 @@ object Routes {
     const val FREELANCE_PROJECTS = "freelance_projects"
 
     const val CRYPTOCURRENCY = "cryptocurrency"
+
+    const val WEEKLY_CHECK_IN = "weekly_check_in"
 }

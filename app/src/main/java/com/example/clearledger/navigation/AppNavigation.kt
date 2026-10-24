@@ -21,17 +21,23 @@ import com.example.clearledger.ui.auth.RegisterScreen
 import com.example.clearledger.ui.auth.RegisterViewModel
 import com.example.clearledger.ui.auth.SplashState
 import com.example.clearledger.ui.auth.SplashViewModel
+
 import com.example.clearledger.ui.home.HomeScreen
 import com.example.clearledger.ui.home.HomeViewModel
+
 import com.example.clearledger.ui.income.IncomeSourcesScreen
 import com.example.clearledger.ui.income.IncomeSourcesViewModel
 import com.example.clearledger.ui.income.IncomeEntriesScreen
 import com.example.clearledger.ui.income.IncomeEntriesViewModel
+
 import com.example.clearledger.ui.goals.CreateGoalScreen
 import com.example.clearledger.ui.goals.SavingsContributionsScreen
+
 import com.example.clearledger.ui.freelance.FreelanceProjectsScreen
 import com.example.clearledger.ui.crypto.CryptoScreen
 
+import com.example.clearledger.ui.weeklycheckin.WeeklyCheckInScreen
+import com.example.clearledger.ui.weeklycheckin.WeeklyCheckInViewModel
 
 @Composable
 fun AppNavigation() {
@@ -41,8 +47,11 @@ fun AppNavigation() {
         navController = navController,
         startDestination = Routes.SPLASH
     ) {
+
+        // Splash screen
         composable(Routes.SPLASH) {
             val splashViewModel: SplashViewModel = hiltViewModel()
+
             val state = splashViewModel.splashState
                 .collectAsStateWithLifecycle().value
 
@@ -84,8 +93,10 @@ fun AppNavigation() {
             }
         }
 
+        // Login screen
         composable(Routes.LOGIN) {
             val loginViewModel: LoginViewModel = hiltViewModel()
+
             val state = loginViewModel.loginState
                 .collectAsStateWithLifecycle().value
 
@@ -107,8 +118,10 @@ fun AppNavigation() {
             )
         }
 
+        // Registration screen
         composable(Routes.REGISTER) {
             val registerViewModel: RegisterViewModel = hiltViewModel()
+
             val state = registerViewModel.registerState
                 .collectAsStateWithLifecycle().value
 
@@ -130,46 +143,59 @@ fun AppNavigation() {
             )
         }
 
+        // Home screen
         composable(Routes.HOME) {
             val homeViewModel: HomeViewModel = hiltViewModel()
 
             HomeScreen(
                 viewModel = homeViewModel,
+
                 onLogout = {
                     homeViewModel.logout()
+
                     navController.navigate(Routes.LOGIN) {
                         popUpTo(Routes.HOME) {
                             inclusive = true
                         }
                     }
                 },
+
                 onIncomeSources = {
                     navController.navigate(Routes.INCOME_SOURCES)
                 },
+
                 onIncomeEntries = {
                     navController.navigate(Routes.INCOME_ENTRIES)
                 },
+
                 onSavingsGoals = {
                     navController.navigate(Routes.SAVINGS_GOALS)
                 },
+
                 onSavingsContributions = {
                     navController.navigate(Routes.SAVINGS_CONTRIBUTIONS)
                 },
+
                 onFreelanceProjects = {
                     navController.navigate(Routes.FREELANCE_PROJECTS)
                 },
+
                 onCryptocurrency = {
                     navController.navigate(Routes.CRYPTOCURRENCY)
                 },
+
+                // Weekly Check-in button
                 onWeeklyCheckIn = {
-                    // Add the weekly check-in route when its screen is ready.
+                    navController.navigate(Routes.WEEKLY_CHECK_IN)
                 },
+
                 onProfile = {
-                    // Add the profile route when its screen is ready.
+                    // Add profile navigation when its screen is ready.
                 }
             )
         }
 
+        // Income sources
         composable(Routes.INCOME_SOURCES) {
             val incomeSourcesViewModel: IncomeSourcesViewModel = viewModel()
 
@@ -181,6 +207,7 @@ fun AppNavigation() {
             )
         }
 
+        // Income entries
         composable(Routes.INCOME_ENTRIES) {
             val incomeEntriesViewModel: IncomeEntriesViewModel = viewModel()
 
@@ -192,17 +219,22 @@ fun AppNavigation() {
             )
         }
 
+        // Savings goals
         composable(Routes.SAVINGS_GOALS) {
             CreateGoalScreen()
         }
 
+        // Savings contributions
         composable(Routes.SAVINGS_CONTRIBUTIONS) {
             SavingsContributionsScreen()
         }
 
+        // Freelance projects
         composable(Routes.FREELANCE_PROJECTS) {
             FreelanceProjectsScreen()
         }
+
+        // Cryptocurrency
         composable(Routes.CRYPTOCURRENCY) {
             CryptoScreen(
                 onBack = {
@@ -210,5 +242,19 @@ fun AppNavigation() {
                 }
             )
         }
+
+        // Weekly Check-in screen
+        composable(Routes.WEEKLY_CHECK_IN) {
+            val weeklyCheckInViewModel: WeeklyCheckInViewModel =
+                hiltViewModel()
+
+            WeeklyCheckInScreen(
+                viewModel = weeklyCheckInViewModel,
+                onBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
     }
 }
+//thisanth

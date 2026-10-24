@@ -1,6 +1,9 @@
+
 package com.example.clearledger.di
 
 import com.example.clearledger.data.repository.AuthRepositoryImpl
+import com.example.clearledger.data.repository.FirestoreWeeklyCheckInRepository
+import com.example.clearledger.data.repository.WeeklyCheckInRepository
 import com.example.clearledger.domain.repository.AuthRepository
 import dagger.Binds
 import dagger.Module
@@ -17,4 +20,10 @@ abstract class RepositoryModule {
     abstract fun bindAuthRepository(
         implementation: AuthRepositoryImpl
     ): AuthRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindWeeklyCheckInRepository(
+        implementation: FirestoreWeeklyCheckInRepository
+    ): WeeklyCheckInRepository
 }
