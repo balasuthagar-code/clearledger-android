@@ -1,3 +1,4 @@
+
 package com.example.clearledger.navigation
 
 object Routes {
@@ -5,4 +6,16 @@ object Routes {
     const val LOGIN = "login"
     const val REGISTER = "register"
     const val HOME = "home"
+
+    const val INCOME_SOURCES = "income_sources"
+    const val INCOME_ENTRIES = "income_entries"
+
+    const val SAVINGS_GOALS = "savings_goals"
+    const val SAVINGS_CONTRIBUTIONS = "savings_contributions"
+
+    const val FREELANCE_PROJECTS = "freelance_projects"
+
+    const val CRYPTOCURRENCY = "cryptocurrency"
+
+    const val WEEKLY_CHECK_IN = "weekly_check_in"
 }
