@@ -5,6 +5,7 @@ import com.example.clearledger.domain.model.IncomeEntry
 import com.example.clearledger.domain.model.IncomeSource
 import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
 import java.time.LocalDate
 import java.time.ZoneId
@@ -33,6 +34,21 @@ class FirestoreIncomeEntryRepository(
                 .collection("incomeSources")
         }
 
+    // Safely reads timestamps stored as numbers, Firestore Timestamps,
+    // or numeric strings.
+    private fun readLongField(
+        doc: DocumentSnapshot,
+        field: String
+    ): Long {
+        return when (val value = doc.get(field)) {
+            is Number -> value.toLong()
+            is Timestamp -> value.toDate().time
+            is Date -> value.time
+            is String -> value.toLongOrNull() ?: 0L
+            else -> 0L
+        }
+    }
+
     override fun loadSources(
         callback: (Result<List<IncomeSource>>) -> Unit
     ) {
@@ -57,8 +73,8 @@ class FirestoreIncomeEntryRepository(
                             defaultCurrency =
                                 doc.getString("defaultCurrency") ?: "LKR",
                             isActive = doc.getBoolean("isActive") ?: true,
-                            createdAt = doc.getLong("createdAt") ?: 0L,
-                            updatedAt = doc.getLong("updatedAt") ?: 0L
+                            createdAt = readLongField(doc, "createdAt"),
+                            updatedAt = readLongField(doc, "updatedAt")
                         )
                     }
                     .filter { it.isActive }
@@ -117,8 +133,8 @@ class FirestoreIncomeEntryRepository(
                                 ?: dateString.take(7),
                             status = doc.getString("status") ?: "EXPECTED",
                             note = doc.getString("note") ?: "",
-                            createdAt = doc.getLong("createdAt") ?: 0L,
-                            updatedAt = doc.getLong("updatedAt") ?: 0L
+                            createdAt = readLongField(doc, "createdAt"),
+                            updatedAt = readLongField(doc, "updatedAt")
                         )
                     }
                     .sortedByDescending { it.date }
@@ -211,4 +227,3 @@ class FirestoreIncomeEntryRepository(
             }
     }
 }
-// thisanth
