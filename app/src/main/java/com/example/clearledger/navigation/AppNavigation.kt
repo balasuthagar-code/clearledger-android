@@ -1,13 +1,22 @@
 
 package com.example.clearledger.navigation
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.NavHost
@@ -36,9 +45,13 @@ fun AppNavigation() {
         navController = navController,
         startDestination = Routes.SPLASH
     ) {
+        expenseGraph(navController)
+        recurringGraph(navController)
+
         composable(Routes.SPLASH) {
             val viewModel: SplashViewModel = hiltViewModel()
-            val state = viewModel.splashState.collectAsStateWithLifecycle().value
+            val state =
+                viewModel.splashState.collectAsStateWithLifecycle().value
 
             LaunchedEffect(state) {
                 when (state) {
@@ -80,7 +93,8 @@ fun AppNavigation() {
 
         composable(Routes.LOGIN) {
             val viewModel: LoginViewModel = hiltViewModel()
-            val state = viewModel.loginState.collectAsStateWithLifecycle().value
+            val state =
+                viewModel.loginState.collectAsStateWithLifecycle().value
 
             LoginScreen(
                 loginState = state,
@@ -102,7 +116,8 @@ fun AppNavigation() {
 
         composable(Routes.REGISTER) {
             val viewModel: RegisterViewModel = hiltViewModel()
-            val state = viewModel.registerState.collectAsStateWithLifecycle().value
+            val state =
+                viewModel.registerState.collectAsStateWithLifecycle().value
 
             RegisterScreen(
                 registerState = state,
@@ -122,38 +137,84 @@ fun AppNavigation() {
             )
         }
 
-
         composable(Routes.HOME) {
             val viewModel: HomeViewModel = hiltViewModel()
 
-            HomeScreen(
-                onLogout = {
-                    viewModel.logout()
-                    navController.navigate(Routes.LOGIN) {
-                        popUpTo(Routes.HOME) {
-                            inclusive = true
+            Scaffold(
+                floatingActionButton = {
+                    FloatingActionButton(
+                        onClick = {
+                            navController.navigate(ExpenseRoutes.add())
                         }
+                    ) {
+                        Text("+")
                     }
                 },
-                onIncomeSources = {
-                    navController.navigate(Routes.INCOME_SOURCES)
-                },
-                onIncomeEntries = {
-                    navController.navigate(Routes.INCOME_ENTRIES)
-                },
-                onSavingsGoals = {
-                    navController.navigate(Routes.SAVINGS_GOALS)
-                },
-                onSavingsContributions = {
-                    navController.navigate(Routes.SAVINGS_CONTRIBUTIONS)
-                }
-            )
-        }
+                bottomBar = {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        TextButton(
+                            onClick = {
+                                navController.navigate(ExpenseRoutes.LIST)
+                            }
+                        ) {
+                            Text("All expenses")
+                        }
 
+                        TextButton(
+                            onClick = {
+                                navController.navigate(RecurringRoutes.LIST)
+                            }
+                        ) {
+                            Text("Recurring")
+                        }
+                    }
+                }
+            ) { padding ->
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(padding)
+                ) {
+                    HomeScreen(
+                        onLogout = {
+                            viewModel.logout()
+                            navController.navigate(Routes.LOGIN) {
+                                popUpTo(Routes.HOME) {
+                                    inclusive = true
+                                }
+                            }
+                        },
+                        onIncomeSources = {
+                            navController.navigate(Routes.INCOME_SOURCES)
+                        },
+                        onIncomeEntries = {
+                            navController.navigate(Routes.INCOME_ENTRIES)
+                        },
+                        onSavingsGoals = {
+                            navController.navigate(Routes.SAVINGS_GOALS)
+                        },
+                        onSavingsContributions = {
+                            navController.navigate(
+                                Routes.SAVINGS_CONTRIBUTIONS
+                            )
+                        }
+                    )
+                }
+            }
+        }
 
         composable(Routes.INCOME_ENTRIES) {
             val viewModel: IncomeEntriesViewModel = hiltViewModel()
             IncomeEntriesScreen(viewModel = viewModel)
+        }
+
+        composable(Routes.INCOME_SOURCES) {
+            IncomeSourcesScreen()
         }
 
         composable(Routes.SAVINGS_GOALS) {
@@ -162,10 +223,6 @@ fun AppNavigation() {
 
         composable(Routes.SAVINGS_CONTRIBUTIONS) {
             SavingsContributionsScreen()
-        }
-
-        composable(Routes.INCOME_SOURCES) {
-            IncomeSourcesScreen()
         }
     }
 }
