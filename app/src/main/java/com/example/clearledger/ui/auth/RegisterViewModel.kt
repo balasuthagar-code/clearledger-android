@@ -44,10 +44,7 @@ class RegisterViewModel @Inject constructor(
                         when (val status = result.data) {
                             is AuthRepository.SetupStatus.NotAuthenticated -> null
                             is AuthRepository.SetupStatus.Confirmed -> UiState.Success(status.user)
-                            is AuthRepository.SetupStatus.Incomplete -> UiState.Error(
-                                "Your account was created, but your profile could not be saved. Account setup is incomplete.",
-                                canRetryProfile = true
-                            )
+                            is AuthRepository.SetupStatus.Incomplete -> UiState.Success(status.user)
                         }
                     }
 

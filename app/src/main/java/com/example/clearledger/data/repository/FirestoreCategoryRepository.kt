@@ -17,6 +17,9 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
+import com.google.firebase.firestore.Source
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /** All data lives under users/{uid}/..., so the security rules can say "only the owner may touch it". */
 class FirestoreCategoryRepository @Inject constructor(
@@ -45,21 +48,30 @@ class FirestoreCategoryRepository @Inject constructor(
         awaitClose { registration.remove() }    // stop listening when nobody collects any more
     }
 
-    override suspend fun seedDefaultCategoriesIfEmpty(): Result<Unit> {
-        return try {
-            val collection = categoriesCollection()
-            val existing = collection.limit(1).get().await()
+    private val seedMutex = Mutex()
+
+    override suspend fun seedDefaultCategoriesIfEmpty(): Result<Unit> = seedMutex.withLock {
+        try {
+            val uid = auth.currentUser?.uid ?: error("Please sign in first.")
+            val collection = firestore.collection("users").document(uid).collection("categories")
+            val existing = collection.limit(1).get(Source.SERVER).await()
+            check(auth.currentUser?.uid == uid) { "Account changed. Retry setup." }
             if (existing.isEmpty) {
-                val batch = firestore.batch()
-                DefaultCategories.all.forEach { batch.set(collection.document(it.id), it.toDto()) }
-                batch.commit().await()
+                firestore.runTransaction { tx ->
+                    check(auth.currentUser?.uid == uid) { "Account changed. Retry setup." }
+                    val defaults = DefaultCategories.all.map { it to collection.document(it.id) }
+                    // Read every fixed ID before any write. Never reset an existing favourite/category.
+                    val snapshots = defaults.map { (_, ref) -> tx.get(ref) }
+                    if (snapshots.none { it.exists() }) {
+                        defaults.forEach { (category, ref) -> tx.set(ref, category.toDto()) }
+                    }
+                    Unit
+                }.await()
             }
+            check(auth.currentUser?.uid == uid) { "Account changed. Retry setup." }
             Result.Success(Unit)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            Result.Error(Exception("Could not set up your categories. Please try again.", e))
-        }
+        } catch (e: CancellationException) { throw e }
+          catch (e: Exception) { Result.Error(Exception("Could not set up your categories. Please retry.", e)) }
     }
 
     /**

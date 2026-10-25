@@ -15,10 +15,12 @@ import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
+import com.example.clearledger.profile.ProfileRepository
 
 class AuthRepositoryImpl @Inject constructor(
     private val auth: FirebaseAuth,
-    private val firestore: FirebaseFirestore
+    private val firestore: FirebaseFirestore,
+    private val profiles: ProfileRepository
 ) : AuthRepository {
 
     override suspend fun login(
@@ -65,22 +67,9 @@ class AuthRepositoryImpl @Inject constructor(
             return Result.Error(Exception(message, e))
         }
 
-        val uid = firebaseUser.uid
-        val fallbackEmail = firebaseUser.email ?: cleanEmail
-
-        return try {
-            val doc = firestore.collection("users").document(uid).get().await()
-            val user = if (doc.exists()) {
-                doc.toObject(User::class.java) ?: User(uid = uid, email = fallbackEmail)
-            } else {
-                User(uid = uid, email = fallbackEmail)
-            }
-            Result.Success(user)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            Result.Error(Exception("Signed in, but could not load profile.", e))
-        }
+        // Auth success and profile readiness are separate. Splash owns profile read/retry.
+        if (auth.currentUser?.uid != firebaseUser.uid) return Result.Error(IllegalStateException("Account changed. Please retry."))
+        return Result.Success(User(firebaseUser.uid, firebaseUser.email ?: cleanEmail))
     }
 
     override suspend fun logout(): Result<Unit> {
@@ -152,22 +141,15 @@ class AuthRepositoryImpl @Inject constructor(
         )
 
         return try {
-            firestore.collection("users")
-                .document(user.uid)
-                .set(user)
-                .await()
+            mergeAuthUser(user)
 
             Result.Success(user)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            Result.Error(
-                Exception(
-                    "Your account was created, but your profile could not " +
-                            "be saved. Account setup is incomplete.",
-                    e
-                )
-            )
+            // Account creation succeeded; a missing profile is recoverable through onboarding.
+            if (auth.currentUser?.uid == user.uid) Result.Success(user)
+            else Result.Error(IllegalStateException("Account changed. Please retry."))
         }
     }
 
@@ -181,10 +163,7 @@ class AuthRepositoryImpl @Inject constructor(
         )
 
         return try {
-            firestore.collection("users")
-                .document(user.uid)
-                .set(user, SetOptions.merge())
-                .await()
+            mergeAuthUser(user)
 
             Result.Success(user)
         } catch (e: CancellationException) {
@@ -200,25 +179,30 @@ class AuthRepositoryImpl @Inject constructor(
         val firebaseUser = auth.currentUser
             ?: return Result.Success(AuthRepository.SetupStatus.NotAuthenticated)
 
-        val uid = firebaseUser.uid
-        val email = firebaseUser.email ?: ""
-
-        return try {
-            val doc = firestore.collection("users").document(uid).get().await()
-            if (!doc.exists()) {
-                Result.Success(
-                    AuthRepository.SetupStatus.Incomplete(User(uid = uid, email = email))
-                )
-            } else {
-                val user = doc.toObject(User::class.java) ?: User(uid = uid, email = email)
-                Result.Success(
-                    AuthRepository.SetupStatus.Confirmed(user)
-                )
-            }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            Result.Error(Exception("Could not verify setup status. Please check your connection.", e))
+        return when (val result = profiles.load(firebaseUser.uid)) {
+            is Result.Error -> result
+            is Result.Success -> Result.Success(if (result.data.complete)
+                AuthRepository.SetupStatus.Confirmed(result.data.user)
+                else AuthRepository.SetupStatus.Incomplete(result.data.user))
         }
+    }
+
+    private suspend fun mergeAuthUser(user: User) {
+        check(auth.currentUser?.uid == user.uid) { "Account changed. Please retry." }
+        val ref = firestore.collection("users").document(user.uid)
+        firestore.runTransaction { tx ->
+            check(auth.currentUser?.uid == user.uid) { "Account changed. Please retry." }
+            val storedUid = tx.get(ref).get("uid")
+            check(storedUid == null || storedUid == "" || storedUid == user.uid) { "Profile account does not match." }
+            tx.set(ref, authFields(user), SetOptions.merge())
+            Unit
+        }.await()
+        check(auth.currentUser?.uid == user.uid) { "Account changed. Please retry." }
+    }
+
+    // Never serialize User defaults into a profile during auth or recovery.
+    private fun authFields(user: User): Map<String, Any> = buildMap {
+        put("uid", user.uid)
+        if (user.email.isNotBlank()) put("email", user.email)
     }
 }
