@@ -2,6 +2,8 @@ package com.example.clearledger.core.common
 
 import java.time.LocalDate
 
+
+
 object SavingsGoalValidator {
 
     val supportedCurrencies =
@@ -19,18 +21,31 @@ object SavingsGoalValidator {
         }
 
         val target = targetAmount.toDoubleOrNull()
-        if (target == null || !target.isFinite() || target <= 0) {
-            return "Target amount must be greater than zero."
-        }
-
         if (currency !in supportedCurrencies) {
             return "Please select a valid currency."
         }
 
-        val starting = startingAmount.toDoubleOrNull()
-        if (starting == null || !starting.isFinite() ||
-            starting < 0 || starting > target
+        val targetMinor = when (
+            val result = CurrencyCore.parseAmount(targetAmount, currency)
         ) {
+            is Result.Success -> result.data
+            is Result.Error ->
+                return "Enter a valid target amount with no more than two decimal places and within the supported range."
+        }
+
+        if (targetMinor <= 0L) {
+            return "Target amount must be greater than zero."
+        }
+
+        val startingMinor = when (
+            val result = CurrencyCore.parseAmount(startingAmount, currency)
+        ) {
+            is Result.Success -> result.data
+            is Result.Error ->
+                return "Enter a valid starting amount with no more than two decimal places and within the supported range."
+        }
+
+        if (startingMinor < 0L || startingMinor > targetMinor) {
             return "Starting amount must be between zero and the target."
         }
 

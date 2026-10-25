@@ -13,6 +13,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import com.example.clearledger.core.common.CurrencyCore
+import com.example.clearledger.core.common.Result
 
 @HiltViewModel
 class SavingsGoalsViewModel @Inject constructor(
@@ -70,6 +72,30 @@ class SavingsGoalsViewModel @Inject constructor(
             return
         }
 
+        val targetMinor = when (
+            val result = CurrencyCore.parseAmount(targetAmount, currency)
+        ) {
+            is Result.Success -> result.data
+            is Result.Error -> {
+                _uiState.update {
+                    it.copy(error = "Invalid target amount.", message = null)
+                }
+                return
+            }
+        }
+
+        val startingMinor = when (
+            val result = CurrencyCore.parseAmount(startingAmount, currency)
+        ) {
+            is Result.Success -> result.data
+            is Result.Error -> {
+                _uiState.update {
+                    it.copy(error = "Invalid starting amount.", message = null)
+                }
+                return
+            }
+        }
+
         viewModelScope.launch {
             _uiState.update {
                 it.copy(isSaving = true, error = null, message = null)
@@ -77,16 +103,14 @@ class SavingsGoalsViewModel @Inject constructor(
 
             try {
 
-                val targetAmountValue = targetAmount.toDoubleOrNull() ?: 0.0
-                val startingAmountValue = startingAmount.toDoubleOrNull() ?: 0.0
+
 
                 val goal = SavingsGoal(
                     name = name.trim(),
-                    targetAmountMinor = (targetAmountValue * 100).toLong(),
+                    targetAmountMinor = targetMinor,
                     currency = currency,
                     deadline = deadline.trim(),
-                    startingSavedMinor = (startingAmountValue * 100).toLong()
-                )
+                    startingSavedMinor = startingMinor                )
 
 
 
