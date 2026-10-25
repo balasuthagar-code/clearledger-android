@@ -1,5 +1,8 @@
 package com.example.clearledger.ui.crypto
 
+import com.example.clearledger.currency.CurrencyRateField
+import androidx.compose.runtime.LaunchedEffect
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -45,6 +48,7 @@ fun CryptoScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     var showAddDialog by remember { mutableStateOf(false) }
     var entryToDelete by remember { mutableStateOf<CryptoEntry?>(null) }
+    LaunchedEffect(state.message) { if (state.message == "Crypto entry saved.") showAddDialog = false }
 
     Column(
         modifier = Modifier
@@ -125,6 +129,8 @@ fun CryptoScreen(
 
     if (showAddDialog) {
         AddCryptoEntryDialog(
+            saveError = state.error,
+            isSaving = state.isSaving,
             onDismiss = { showAddDialog = false },
             onSave = { asset, date, type, amount, currency, rate, costBasis, note ->
                 val previousError = state.error
@@ -140,23 +146,7 @@ fun CryptoScreen(
                     note = note
                 )
 
-                // The ViewModel validates and reports errors in uiState.
-                // Close the dialog only when the local validation succeeds.
-                val localError = CryptoEntryValidator.validate(
-                    assetName = asset,
-                    date = date,
-                    type = type,
-                    originalValue = amount,
-                    currency = currency,
-                    rate = rate,
-                    costBasisLkr = costBasis
-                )
 
-                if (localError == null && previousError == null) {
-                    showAddDialog = false
-                } else if (localError == null) {
-                    showAddDialog = false
-                }
             }
         )
     }
@@ -249,6 +239,8 @@ private fun CryptoEntryCard(
 
 @Composable
 private fun AddCryptoEntryDialog(
+    saveError: String?,
+    isSaving: Boolean,
     onDismiss: () -> Unit,
     onSave: (
         asset: String,
@@ -280,6 +272,7 @@ private fun AddCryptoEntryDialog(
             LazyColumn(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
+                item { saveError?.let { Text(it, color = MaterialTheme.colorScheme.error) } }
                 item {
                     OutlinedTextField(
                         value = asset,
@@ -354,7 +347,7 @@ private fun AddCryptoEntryDialog(
                                     text = { Text(option) },
                                     onClick = {
                                         currency = option
-                                        if (option == "LKR") rate = "1"
+                                        rate = if (option == "LKR") "1" else ""
                                         currencyMenuExpanded = false
                                     }
                                 )
@@ -364,14 +357,7 @@ private fun AddCryptoEntryDialog(
                 }
 
                 item {
-                    OutlinedTextField(
-                        value = rate,
-                        onValueChange = { rate = it },
-                        label = { Text("Exchange rate to LKR") },
-                        enabled = currency != "LKR",
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
+                    CurrencyRateField(original = currency, value = rate, onChange = { rate = it }, enabled = !isSaving)
                 }
 
                 if (type == CryptoEntryType.SELL ||
@@ -409,6 +395,7 @@ private fun AddCryptoEntryDialog(
         },
         confirmButton = {
             Button(
+                enabled = !isSaving,
                 onClick = {
                     validationError = CryptoEntryValidator.validate(
                         assetName = asset,
