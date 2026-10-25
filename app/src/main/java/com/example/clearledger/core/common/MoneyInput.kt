@@ -1,7 +1,6 @@
 package com.example.clearledger.core.common
 
 import java.math.BigDecimal
-import java.math.RoundingMode
 
 /**
  * Text <-> minor units, and the BR-2 currency conversion. Pure Kotlin, so it is unit tested
@@ -24,11 +23,11 @@ object MoneyInput {
     fun parseToMinor(text: String): Long? {
         val cleaned = text.trim().replace(",", "").replace(" ", "")
         if (!AMOUNT.matches(cleaned)) return null
-        return BigDecimal(cleaned).movePointRight(2).longValueExact()
+        return MoneyArithmetic.toMinor(BigDecimal(cleaned), 2)
     }
 
     /** 125050 -> "1250.50" (plain text for an input box, no thousands separator). */
-    fun minorToInputText(minor: Long): String = BigDecimal.valueOf(minor, 2).toPlainString()
+    fun minorToInputText(minor: Long): String = MoneyArithmetic.format(minor, 2)
 
     /** Positive exchange rate or null. */
     fun parseRate(text: String): BigDecimal? {
@@ -43,7 +42,7 @@ object MoneyInput {
      * Example: USD 100.00 (10000) at 300.50 -> 3,005,000 = LKR 30,050.00.
      */
     fun toBaseMinor(amountMinor: Long, rate: BigDecimal): Long? = try {
-        BigDecimal.valueOf(amountMinor).multiply(rate).setScale(0, RoundingMode.HALF_UP).longValueExact()
+        MoneyArithmetic.convertMinor(amountMinor, rate)
     } catch (e: ArithmeticException) {
         null
     }

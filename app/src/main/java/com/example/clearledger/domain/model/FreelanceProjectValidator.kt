@@ -24,30 +24,65 @@ object FreelanceProjectValidator {
         if (client.isBlank()) {
             return "Please enter the client name."
         }
+        val amountMinor = when (
+            val result = CurrencyCore.parseAmount(agreedAmount, currency)
+        ) {
+            is Result.Success -> result.data
+            is Result.Error -> {
+                return when (
+                    (result.exception as? CurrencyException)?.failure
+                ) {
+                    CurrencyFailure.UNSUPPORTED_CURRENCY ->
+                        "Please select a valid currency."
 
-        val amount = agreedAmount.toBigDecimalOrNull()
-            ?: return "Please enter a valid project amount."
+                    CurrencyFailure.EXCESS_AMOUNT_PRECISION ->
+                        "Enter a project amount with no more than two decimal places."
 
-        if (amount <= BigDecimal.ZERO) {
+                    CurrencyFailure.AMOUNT_OVERFLOW ->
+                        "The project amount is too large."
+
+                    else ->
+                        "Please enter a valid project amount."
+                }
+            }
+        }
+
+        if (amountMinor <= 0L) {
             return "The project amount must be greater than zero."
         }
 
-        if (currency !in listOf("LKR", "USD", "EUR", "GBP", "AUD", "INR")) {
-            return "Please select a valid currency."
-        }
-
-        val exchangeRate = rate.toBigDecimalOrNull()
-            ?: return "Please enter a valid exchange rate."
-
-        if (exchangeRate <= BigDecimal.ZERO) {
-            return "The exchange rate must be greater than zero."
+        val exchangeRate = when (val result = CurrencyCore.parseRate(rate)) {
+            is Result.Success -> result.data
+            is Result.Error ->
+                return "Please enter an exchange rate greater than zero."
         }
 
         if (currency == "LKR" && exchangeRate.compareTo(BigDecimal.ONE) != 0) {
             return "For LKR projects, the exchange rate must be 1."
         }
 
-        return null
+        return when (
+            val result = CurrencyCore.convert(
+                originalAmountMinor = amountMinor,
+                originalCurrency = currency,
+                baseCurrency = "LKR",
+                exchangeRate = exchangeRate
+            )
+        ) {
+            is Result.Success -> null
+            is Result.Error -> when (
+                (result.exception as? CurrencyException)?.failure
+            ) {
+                CurrencyFailure.CONVERSION_OVERFLOW ->
+                    "The converted project amount is too large."
+
+                CurrencyFailure.POSITIVE_AMOUNT_ROUNDS_TO_ZERO ->
+                    "The converted project amount is too small."
+
+                else ->
+                    "Please check the project currency and exchange rate."
+            }
+        }
     }
 
     fun convert(
@@ -55,37 +90,39 @@ object FreelanceProjectValidator {
         currency: String,
         rate: String
     ): ProjectValues? {
-        val amount = agreedAmount.toBigDecimalOrNull() ?: return null
-        val exchangeRate = rate.toBigDecimalOrNull() ?: return null
+        val amountMinor = when (
+            val result = CurrencyCore.parseAmount(agreedAmount, currency)
+        ) {
+            is Result.Success -> result.data
+            is Result.Error -> return null
+        }
 
-        if (amount <= BigDecimal.ZERO || exchangeRate <= BigDecimal.ZERO) {
+        if (amountMinor <= 0L) return null
+
+        val exchangeRate = when (val result = CurrencyCore.parseRate(rate)) {
+            is Result.Success -> result.data
+            is Result.Error -> return null
+        }
+
+        if (currency == "LKR" && exchangeRate.compareTo(BigDecimal.ONE) != 0) {
             return null
         }
 
-        return try {
-            val originalMinor = amount
-                .multiply(BigDecimal(100))
-                .setScale(0, java.math.RoundingMode.HALF_UP)
-                .longValueExact()
-
-            val baseAmount = if (currency == "LKR") {
-                amount
-            } else {
-                amount.multiply(exchangeRate)
-            }
-
-            val baseMinor = baseAmount
-                .multiply(BigDecimal(100))
-                .setScale(0, java.math.RoundingMode.HALF_UP)
-                .longValueExact()
-
-            ProjectValues(
-                agreedAmountMinor = originalMinor,
-                exchangeRate = exchangeRate.stripTrailingZeros().toPlainString(),
-                baseAmountMinor = baseMinor
+        return when (
+            val result = CurrencyCore.convert(
+                originalAmountMinor = amountMinor,
+                originalCurrency = currency,
+                baseCurrency = "LKR",
+                exchangeRate = exchangeRate
             )
-        } catch (_: ArithmeticException) {
-            null
+        ) {
+            is Result.Success -> ProjectValues(
+                agreedAmountMinor = result.data.originalAmountMinor,
+                exchangeRate = result.data.appliedRatePlain,
+                baseAmountMinor = result.data.baseAmountMinor
+            )
+
+            is Result.Error -> null
         }
     }
 

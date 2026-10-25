@@ -1,5 +1,7 @@
 package com.example.clearledger.ui.expense.form
 
+import com.example.clearledger.currency.ConfirmedRateRecorder
+
 import android.util.Log
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
@@ -75,11 +77,15 @@ class ExpenseFormViewModel @Inject constructor(
     private val expenseRepository: ExpenseRepository,
     private val categoryRepository: CategoryRepository,
     private val saveExpense: SaveExpenseUseCase,
-    private val suggestMerchants: SuggestMerchantsUseCase
+    private val suggestMerchants: SuggestMerchantsUseCase,
+    private val rateRecorder: ConfirmedRateRecorder
 ) : ViewModel() {
+    private val currencyOwner = rateRecorder.ownerUid()
 
     private val expenseId: String? = savedStateHandle.get<String>(ExpenseRoutes.ARG_EXPENSE_ID)
     private var createdAtMillis: Long = 0L
+    private var loadedMoney: Expense? = null
+
 
     private val _state = MutableStateFlow(
         ExpenseFormState(
@@ -141,13 +147,14 @@ class ExpenseFormViewModel @Inject constructor(
                     }
                 }
                 is Result.Error -> _state.update {
-                    it.copy(isLoading = false, loadError = "Could not load this expense. Check your connection and try again.")
+                    it.copy(isLoading = false, loadError = if (result.exception is com.example.clearledger.currency.CurrencyHistoryException) result.exception.message else "Could not load this expense. Check your connection and try again.")
                 }
             }
         }
     }
 
     private fun populate(e: Expense) {
+        loadedMoney = e
         createdAtMillis = e.createdAtMillis
         _state.update {
             it.copy(
@@ -171,7 +178,7 @@ class ExpenseFormViewModel @Inject constructor(
         _state.update { it.copy(amountText = text, errors = it.errors.copy(amount = null)) }
 
     fun onCurrencyChange(currency: String) =
-        _state.update { it.copy(currency = currency, errors = it.errors.copy(rate = null)) }
+        _state.update { it.copy(currency = currency, rateText = "", errors = it.errors.copy(rate = null)) }
 
     fun onRateChange(text: String) =
         _state.update { it.copy(rateText = text, errors = it.errors.copy(rate = null)) }
@@ -224,7 +231,16 @@ class ExpenseFormViewModel @Inject constructor(
 
     fun save() {
         val s = _state.value
+        if (!rateRecorder.isOwner(currencyOwner)) {
+            _state.update { it.copy(saveError = "Account changed. Reopen this form.") }
+            return
+        }
         if (s.isSaving || s.isLoading || s.loadError != null) return    // ignore double taps
+        val previous = loadedMoney
+        val moneyChanged = previous == null || previous.currency != s.currency ||
+            previous.amountMinor != MoneyInput.parseToMinor(s.amountText) ||
+            (s.currency != Currencies.BASE && previous.exchangeRate.toBigDecimalOrNull()?.compareTo((com.example.clearledger.core.common.CurrencyCore.parseRate(s.rateText) as? Result.Success)?.data ?: java.math.BigDecimal.ZERO) != 0)
+        val remembered = if (moneyChanged) rateRecorder.capture(s.currency, Currencies.BASE, s.rateText, currencyOwner) else null
         _state.update { it.copy(isSaving = true, saveError = null) }
 
         viewModelScope.launch {
@@ -245,6 +261,8 @@ class ExpenseFormViewModel @Inject constructor(
             )
             when (result) {
                 is SaveExpenseResult.Saved -> {
+                    // Existing Saved may mean an offline queued write; this remembers local confirmation only.
+                    rateRecorder.afterSave(remembered)
                     _state.update { it.copy(isSaving = false) }
                     _events.send(ExpenseFormEvent.Saved)
                 }

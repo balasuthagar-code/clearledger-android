@@ -1,5 +1,7 @@
 package com.example.clearledger.ui.recurring.form
 
+import com.example.clearledger.currency.CurrencyRateField
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -156,16 +158,9 @@ fun RecurringFormScreen(
                 }
                 // FR-CUR-03: no rate field for the base currency.
                 if (state.currency != Currencies.BASE) {
-                    OutlinedTextField(
-                        value = state.rateText,
-                        onValueChange = actions.onRateChange,
-                        label = { Text("Exchange rate (${Currencies.BASE} per 1 ${state.currency})") },
-                        singleLine = true,
-                        isError = state.errors.rate != null,
-                        supportingText = { state.errors.rate?.let { Text(it) } },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        modifier = Modifier.fillMaxWidth()
-                    )
+                    CurrencyRateField(original = state.currency, value = state.rateText,
+                            onChange = actions.onRateChange, editing = state.isEditing,
+                            enabled = !state.isSaving, error = state.errors.rate)
                 }
 
                 Text("Category", style = MaterialTheme.typography.titleSmall)

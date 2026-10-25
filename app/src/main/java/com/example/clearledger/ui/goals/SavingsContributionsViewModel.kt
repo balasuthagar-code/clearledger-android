@@ -17,6 +17,11 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import com.example.clearledger.core.common.CurrencyCore
+import com.example.clearledger.core.common.CurrencyException
+import com.example.clearledger.core.common.CurrencyFailure
+import com.example.clearledger.core.common.Result
+
 
 @HiltViewModel
 class SavingsContributionsViewModel @Inject constructor(
@@ -123,17 +128,45 @@ class SavingsContributionsViewModel @Inject constructor(
             return
         }
 
-        val amount = amountText.toDoubleOrNull()
+        val amountMinor = when (
+            val result = CurrencyCore.parseAmount(amountText, goal.currency)
+        ) {
+            is Result.Success -> result.data
 
-        if (amount == null || !amount.isFinite() || amount <= 0.0) {
+            is Result.Error -> {
+                val failure =
+                    (result.exception as? CurrencyException)?.failure
+
+                val errorMessage = when (failure) {
+                    CurrencyFailure.EXCESS_AMOUNT_PRECISION ->
+                        "Enter an amount with no more than two decimal places."
+
+                    CurrencyFailure.AMOUNT_OVERFLOW ->
+                        "The contribution amount is too large."
+
+                    CurrencyFailure.UNSUPPORTED_CURRENCY ->
+                        "The selected goal has an unsupported currency."
+
+                    else ->
+                        "Enter a valid contribution amount."
+                }
+
+                _uiState.update {
+                    it.copy(error = errorMessage, message = null)
+                }
+                return
+            }
+        }
+
+        if (amountMinor <= 0L) {
             _uiState.update {
                 it.copy(
-                    error = "Enter an amount greater than zero."
+                    error = "Enter an amount greater than zero.",
+                    message = null
                 )
             }
             return
         }
-
         val validDate = try {
             !LocalDate.parse(date).isAfter(LocalDate.now())
         } catch (_: Exception) {
@@ -159,8 +192,6 @@ class SavingsContributionsViewModel @Inject constructor(
             }
 
             try {
-
-                val amountMinor = (amount * 100).toLong()
 
                 val contribution = SavingsContribution(
                     id = editing?.id ?: "",

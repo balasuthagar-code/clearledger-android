@@ -1,5 +1,7 @@
 package com.example.clearledger.ui.recurring.form
 
+import com.example.clearledger.currency.ConfirmedRateRecorder
+
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -58,10 +60,14 @@ class RecurringFormViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val repository: RecurringRepository,
     categoryRepository: CategoryRepository,
-    private val saveRecurring: SaveRecurringUseCase
+    private val saveRecurring: SaveRecurringUseCase,
+    private val rateRecorder: ConfirmedRateRecorder
 ) : ViewModel() {
+    private val currencyOwner = rateRecorder.ownerUid()
 
     private val recurringId: String? = savedStateHandle.get<String>(RecurringRoutes.ARG_RECURRING_ID)
+    private var loadedMoney: RecurringItem? = null
+
 
     private val _state = MutableStateFlow(
         RecurringFormState(isEditing = recurringId != null, isLoading = recurringId != null)
@@ -92,13 +98,14 @@ class RecurringFormViewModel @Inject constructor(
                     }
                 }
                 is Result.Error -> _state.update {
-                    it.copy(isLoading = false, loadError = "Could not load this item. Check your connection and try again.")
+                    it.copy(isLoading = false, loadError = if (result.exception is com.example.clearledger.currency.CurrencyHistoryException) result.exception.message else "Could not load this item. Check your connection and try again.")
                 }
             }
         }
     }
 
     private fun populate(item: RecurringItem) {
+        loadedMoney = item
         _state.update {
             it.copy(
                 isLoading = false,
@@ -118,7 +125,7 @@ class RecurringFormViewModel @Inject constructor(
     // ---- field changes (each also clears that field's old error) ----
     fun onNameChange(text: String) = _state.update { it.copy(name = text, errors = it.errors.copy(name = null)) }
     fun onAmountChange(text: String) = _state.update { it.copy(amountText = text, errors = it.errors.copy(amount = null)) }
-    fun onCurrencyChange(code: String) = _state.update { it.copy(currency = code, errors = it.errors.copy(rate = null)) }
+    fun onCurrencyChange(code: String) = _state.update { it.copy(currency = code, rateText = "", errors = it.errors.copy(rate = null)) }
     fun onRateChange(text: String) = _state.update { it.copy(rateText = text, errors = it.errors.copy(rate = null)) }
     fun onCategorySelected(id: String) = _state.update { it.copy(categoryId = id, errors = it.errors.copy(category = null)) }
 
@@ -137,7 +144,16 @@ class RecurringFormViewModel @Inject constructor(
 
     fun save() {
         val s = _state.value
+        if (!rateRecorder.isOwner(currencyOwner)) {
+            _state.update { it.copy(saveError = "Account changed. Reopen this form.") }
+            return
+        }
         if (s.isSaving || s.isLoading || s.loadError != null) return
+        val previous = loadedMoney
+        val moneyChanged = previous == null || previous.currency != s.currency ||
+            previous.amountMinor != MoneyInput.parseToMinor(s.amountText) ||
+            (s.currency != Currencies.BASE && previous.exchangeRate.toBigDecimalOrNull()?.compareTo((com.example.clearledger.core.common.CurrencyCore.parseRate(s.rateText) as? Result.Success)?.data ?: java.math.BigDecimal.ZERO) != 0)
+        val remembered = if (moneyChanged) rateRecorder.capture(s.currency, Currencies.BASE, s.rateText, currencyOwner) else null
         _state.update { it.copy(isSaving = true, saveError = null) }
 
         viewModelScope.launch {
@@ -157,6 +173,8 @@ class RecurringFormViewModel @Inject constructor(
             )
             when (result) {
                 is SaveRecurringResult.Saved -> {
+                    // Existing Saved may mean an offline queued write; this remembers local confirmation only.
+                    rateRecorder.afterSave(remembered)
                     _state.update { it.copy(isSaving = false) }
                     _events.send(RecurringFormEvent.Saved)
                 }

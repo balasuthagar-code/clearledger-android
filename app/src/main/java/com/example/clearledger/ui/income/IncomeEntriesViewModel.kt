@@ -1,6 +1,12 @@
 
 package com.example.clearledger.ui.income
 
+import com.example.clearledger.currency.ConfirmedRateRecorder
+import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
+import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.launch
+
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -9,14 +15,20 @@ import com.example.clearledger.core.common.IncomeEntryValidator
 import com.example.clearledger.data.repository.FirestoreIncomeEntryRepository
 import com.example.clearledger.domain.model.IncomeEntry
 import com.example.clearledger.domain.model.IncomeSource
-import java.math.BigDecimal
 import java.time.LocalDate
+import com.example.clearledger.core.common.CurrencyCore
+import com.example.clearledger.core.common.CurrencyException
+import com.example.clearledger.core.common.CurrencyFailure
+import com.example.clearledger.core.common.Result
+import com.example.clearledger.data.repository.IncomeEntryRepository
 
 
-class IncomeEntriesViewModel(
-    private val repository: FirestoreIncomeEntryRepository =
-        FirestoreIncomeEntryRepository()
+@HiltViewModel
+class IncomeEntriesViewModel @Inject constructor(
+    private val repository: IncomeEntryRepository,
+    private val rateRecorder: ConfirmedRateRecorder
 ) : ViewModel() {
+    private val currencyOwner = rateRecorder.ownerUid()
 
     var state by mutableStateOf(IncomeEntriesUiState())
         private set
@@ -69,15 +81,40 @@ class IncomeEntriesViewModel(
         note: String,
         status: String
     ) {
-        val amountMinor = try {
-            BigDecimal(amountText.trim())
-                .movePointRight(2)
-                .longValueExact()
-        } catch (_: Exception) {
-            null
+        if (state.isSaving) return
+        if (!rateRecorder.isOwner(currencyOwner)) {
+            state = state.copy(error = "Account changed. Reopen this form.")
+            return
+        }
+        val amountMinor = when (
+            val result = CurrencyCore.parseAmount(amountText, currency)
+        ) {
+            is Result.Success -> result.data
+
+            is Result.Error -> {
+                val failure =
+                    (result.exception as? CurrencyException)?.failure
+
+                val message = when (failure) {
+                    CurrencyFailure.UNSUPPORTED_CURRENCY ->
+                        "Please select a valid currency."
+
+                    CurrencyFailure.EXCESS_AMOUNT_PRECISION ->
+                        "Enter an amount with no more than two decimal places."
+
+                    CurrencyFailure.AMOUNT_OVERFLOW ->
+                        "The amount is too large."
+
+                    else ->
+                        "Enter a valid amount."
+                }
+
+                state = state.copy(error = message, message = null)
+                return
+            }
         }
 
-        if (amountMinor == null || amountMinor <= 0L) {
+        if (amountMinor <= 0L)  {
             state = state.copy(
                 error = "Enter a valid amount greater than zero.",
                 message = null
@@ -85,7 +122,56 @@ class IncomeEntriesViewModel(
             return
         }
 
-        val rate = if (currency == "LKR") "1" else rateText.trim()
+        // Existing income screens currently use LKR as their base currency.
+        val baseCurrency = "LKR"
+
+        val parsedRate = if (currency == baseCurrency) {
+            null
+        } else {
+            when (val result = CurrencyCore.parseRate(rateText)) {
+                is Result.Success -> result.data
+                is Result.Error -> {
+                    state = state.copy(
+                        error = "Enter a valid exchange rate greater than zero.",
+                        message = null
+                    )
+                    return
+                }
+            }
+        }
+
+        val conversion = when (
+            val result = CurrencyCore.convert(
+                originalAmountMinor = amountMinor,
+                originalCurrency = currency,
+                baseCurrency = baseCurrency,
+                exchangeRate = parsedRate
+            )
+        ) {
+            is Result.Success -> result.data
+            is Result.Error -> {
+                val failure =
+                    (result.exception as? CurrencyException)?.failure
+
+                val errorMessage = when (failure) {
+                    CurrencyFailure.CONVERSION_OVERFLOW ->
+                        "The converted amount is too large."
+
+                    CurrencyFailure.POSITIVE_AMOUNT_ROUNDS_TO_ZERO ->
+                        "The converted amount is too small."
+
+                    else ->
+                        "Could not convert this amount. Check the currency and rate."
+                }
+
+                state = state.copy(error = errorMessage, message = null)
+                return
+            }
+        }
+
+        val unchangedMoney = existing != null && existing.originalCurrency == currency &&
+            existing.originalAmountMinor == amountMinor && existing.exchangeRate.toBigDecimalOrNull()?.compareTo(conversion.appliedRate) == 0
+        val rate = if (unchangedMoney) existing!!.exchangeRate else conversion.appliedRatePlain
 
         val entry = IncomeEntry(
             id = existing?.id ?: "",
@@ -93,15 +179,7 @@ class IncomeEntriesViewModel(
             originalAmountMinor = amountMinor,
             originalCurrency = currency,
             exchangeRate = rate,
-            baseAmountMinor = try {
-                IncomeEntryValidator.calculateBaseAmountMinor(amountMinor, rate)
-            } catch (_: Exception) {
-                state = state.copy(
-                    error = "Enter a valid positive exchange rate.",
-                    message = null
-                )
-                return
-            },
+            baseAmountMinor = if (unchangedMoney) existing!!.baseAmountMinor else conversion.baseAmountMinor,
             date = date.trim(),
             monthKey = try {
                 IncomeEntryValidator.monthKey(date.trim())
@@ -122,9 +200,11 @@ class IncomeEntriesViewModel(
 
         state = state.copy(isSaving = true, error = null, message = null)
 
+        val remembered = if (existing == null || !unchangedMoney) rateRecorder.capture(currency, baseCurrency, rate, currencyOwner) else null
         repository.saveEntry(entry) { result ->
             result.fold(
                 onSuccess = {
+                    viewModelScope.launch { rateRecorder.afterSave(remembered) }
                     state = state.copy(
                         isSaving = false,
                         message = if (existing == null) {

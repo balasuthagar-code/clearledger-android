@@ -2,7 +2,6 @@ package com.example.clearledger.core.common
 
 import com.example.clearledger.domain.model.CryptoEntryType
 import java.math.BigDecimal
-import java.math.RoundingMode
 import java.time.LocalDate
 import java.time.YearMonth
 
@@ -43,22 +42,29 @@ object CryptoEntryValidator {
             return "Please select a valid entry type."
         }
 
-        if (currency !in listOf("LKR", "USD", "EUR", "GBP", "AUD", "INR")) {
+        if (currency !in Currencies.supported) {
             return "Please select a valid currency."
         }
 
         val amount = originalValue.toBigDecimalOrNull()
             ?: return "Please enter a valid amount."
 
-        if (amount <= BigDecimal.ZERO) {
+        val amountMinor = when (
+            val result = CurrencyCore.parseAmount(originalValue, currency)
+        ) {
+            is Result.Success -> result.data
+            is Result.Error ->
+                return "Enter a valid amount with no more than two decimal places and within the supported range."
+        }
+
+        if (amountMinor <= 0L) {
             return "The amount must be greater than zero."
         }
 
-        val exchangeRate = rate.toBigDecimalOrNull()
-            ?: return "Please enter a valid exchange rate."
-
-        if (exchangeRate <= BigDecimal.ZERO) {
-            return "The exchange rate must be greater than zero."
+        val exchangeRate = when (val result = CurrencyCore.parseRate(rate)) {
+            is Result.Success -> result.data
+            is Result.Error ->
+                return "Enter a valid exchange rate greater than zero."
         }
 
         if (currency == "LKR" &&
@@ -70,11 +76,39 @@ object CryptoEntryValidator {
         if (type == CryptoEntryType.SELL ||
             type == CryptoEntryType.RESULT
         ) {
-            val costBasis = costBasisLkr.toBigDecimalOrNull()
-                ?: return "Please enter the cost basis in LKR."
+            val costBasisMinor = when (
+                val result = CurrencyCore.parseAmount(costBasisLkr, "LKR")
+            ) {
+                is Result.Success -> result.data
+                is Result.Error ->
+                    return "Enter a valid cost basis in LKR with no more than two decimal places and within the supported range."
+            }
 
-            if (costBasis < BigDecimal.ZERO) {
+            if (costBasisMinor < 0L) {
                 return "The cost basis cannot be negative."
+            }
+        }
+
+        return when (
+            val result = CurrencyCore.convert(
+                originalAmountMinor = amountMinor,
+                originalCurrency = currency,
+                baseCurrency = "LKR",
+                exchangeRate = exchangeRate
+            )
+        ) {
+            is Result.Success -> null
+            is Result.Error -> when (
+                (result.exception as? CurrencyException)?.failure
+            ) {
+                CurrencyFailure.CONVERSION_OVERFLOW ->
+                    "The converted amount is too large."
+
+                CurrencyFailure.POSITIVE_AMOUNT_ROUNDS_TO_ZERO ->
+                    "The converted amount is too small."
+
+                else ->
+                    "Please check the currency and exchange rate."
             }
         }
 
@@ -89,64 +123,69 @@ object CryptoEntryValidator {
         rate: String,
         costBasisLkr: String
     ): ValidatedCryptoEntry? {
-        return try {
-            val amount = originalValue.toBigDecimalOrNull()
-                ?: return null
-
-            val exchangeRate = rate.toBigDecimalOrNull()
-                ?: return null
-
-            if (amount <= BigDecimal.ZERO ||
-                exchangeRate <= BigDecimal.ZERO
-            ) {
-                return null
-            }
-
-            val originalMinor = amount
-                .multiply(BigDecimal(100))
-                .setScale(0, RoundingMode.HALF_UP)
-                .longValueExact()
-
-            val baseAmount = if (currency == "LKR") {
-                amount
-            } else {
-                amount.multiply(exchangeRate)
-            }
-
-            val baseMinor = baseAmount
-                .multiply(BigDecimal(100))
-                .setScale(0, RoundingMode.HALF_UP)
-                .longValueExact()
-
-            val costBasisMinor = if (
-                type == CryptoEntryType.SELL ||
-                type == CryptoEntryType.RESULT
-            ) {
-                val costBasis = costBasisLkr.toBigDecimalOrNull()
-                    ?: return null
-
-                if (costBasis < BigDecimal.ZERO) return null
-
-                costBasis
-                    .multiply(BigDecimal(100))
-                    .setScale(0, RoundingMode.HALF_UP)
-                    .longValueExact()
-            } else {
-                0L
-            }
-
-            ValidatedCryptoEntry(
-                originalValueMinor = originalMinor,
-                exchangeRate = exchangeRate
-                    .stripTrailingZeros()
-                    .toPlainString(),
-                baseValueMinor = baseMinor,
-                costBasisBaseMinor = costBasisMinor,
-                monthKey = YearMonth.parse(date.substring(0, 7)).toString()
-            )
-        } catch (_: Exception) {
-            null
+        val amountMinor = when (
+            val result = CurrencyCore.parseAmount(originalValue, currency)
+        ) {
+            is Result.Success -> result.data
+            is Result.Error -> return null
         }
+
+        if (amountMinor <= 0L) return null
+
+        val exchangeRate = when (val result = CurrencyCore.parseRate(rate)) {
+            is Result.Success -> result.data
+            is Result.Error -> return null
+        }
+
+        if (currency == "LKR" &&
+            exchangeRate.compareTo(BigDecimal.ONE) != 0
+        ) {
+            return null
+        }
+
+        val conversion = when (
+            val result = CurrencyCore.convert(
+                originalAmountMinor = amountMinor,
+                originalCurrency = currency,
+                baseCurrency = "LKR",
+                exchangeRate = exchangeRate
+            )
+        ) {
+            is Result.Success -> result.data
+            is Result.Error -> return null
+        }
+
+        val costBasisMinor = if (
+            type == CryptoEntryType.SELL ||
+            type == CryptoEntryType.RESULT
+        ) {
+            when (
+                val result = CurrencyCore.parseAmount(costBasisLkr, "LKR")
+            ) {
+                is Result.Success -> {
+                    if (result.data < 0L) return null
+                    result.data
+                }
+
+                is Result.Error -> return null
+            }
+        } else {
+            0L
+        }
+
+        val monthKey = try {
+            YearMonth.from(LocalDate.parse(date)).toString()
+        } catch (_: Exception) {
+            return null
+        }
+
+        return ValidatedCryptoEntry(
+            originalValueMinor = conversion.originalAmountMinor,
+            exchangeRate = conversion.appliedRatePlain,
+            baseValueMinor = conversion.baseAmountMinor,
+            costBasisBaseMinor = costBasisMinor,
+            monthKey = monthKey
+        )
     }
 }
 // thisanth

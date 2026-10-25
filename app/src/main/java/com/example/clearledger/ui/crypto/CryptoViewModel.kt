@@ -1,5 +1,7 @@
 package com.example.clearledger.ui.crypto
 
+import com.example.clearledger.currency.ConfirmedRateRecorder
+
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.clearledger.core.common.CryptoEntryValidator
@@ -18,6 +20,7 @@ import kotlinx.coroutines.launch
 
 data class CryptoUiState(
     val isLoading: Boolean = true,
+    val isSaving: Boolean = false,
     val entries: List<CryptoEntry> = emptyList(),
     val error: String? = null,
     val message: String? = null
@@ -25,8 +28,10 @@ data class CryptoUiState(
 
 @HiltViewModel
 class CryptoViewModel @Inject constructor(
-    private val repository: CryptoEntryRepository
+    private val repository: CryptoEntryRepository,
+    private val rateRecorder: ConfirmedRateRecorder
 ) : ViewModel() {
+    private val currencyOwner = rateRecorder.ownerUid()
 
     private val _uiState = MutableStateFlow(CryptoUiState())
     val uiState: StateFlow<CryptoUiState> = _uiState.asStateFlow()
@@ -71,6 +76,11 @@ class CryptoViewModel @Inject constructor(
         costBasisLkr: String,
         note: String
     ) {
+        if (_uiState.value.isSaving) return
+        if (!rateRecorder.isOwner(currencyOwner)) {
+            _uiState.value = _uiState.value.copy(error = "Account changed. Reopen this form.")
+            return
+        }
         val validationError = CryptoEntryValidator.validate(
             assetName = assetName,
             date = date,
@@ -123,16 +133,21 @@ class CryptoViewModel @Inject constructor(
             message = null
         )
 
+        val remembered = rateRecorder.capture(currency, "LKR", entry.exchangeRate, currencyOwner)
+        _uiState.value = _uiState.value.copy(isSaving = true)
         repository.addEntry(
             entry = entry,
             onSuccess = {
+                viewModelScope.launch { rateRecorder.afterSave(remembered) }
                 _uiState.value = _uiState.value.copy(
+                    isSaving = false,
                     error = null,
                     message = "Crypto entry saved."
                 )
             },
             onError = { message ->
                 _uiState.value = _uiState.value.copy(
+                    isSaving = false,
                     error = message,
                     message = null
                 )

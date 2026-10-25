@@ -1,5 +1,7 @@
 package com.example.clearledger.ui.recurring
 
+import com.example.clearledger.currency.testRateRecorder
+
 import androidx.lifecycle.SavedStateHandle
 import com.example.clearledger.core.common.Result
 import com.example.clearledger.domain.model.ExpenseCategory
@@ -55,7 +57,7 @@ class RecurringFormViewModelTest {
         val handle = SavedStateHandle(if (id == null) emptyMap() else mapOf(RecurringRoutes.ARG_RECURRING_ID to id))
         return RecurringFormViewModel(
             handle, repo, FakeCategories(),
-            SaveRecurringUseCase(repo, ValidateRecurringInputUseCase(ValidateExpenseInputUseCase()))
+            SaveRecurringUseCase(repo, ValidateRecurringInputUseCase(ValidateExpenseInputUseCase())), testRateRecorder()
         )
     }
 

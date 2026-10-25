@@ -1,5 +1,10 @@
 package com.example.clearledger.ui.freelance
 
+import com.example.clearledger.currency.CurrencyRateField
+import com.example.clearledger.currency.currencyCompletionDependencies
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
+
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -39,6 +44,10 @@ import java.time.LocalDate
 
 @Composable
 fun FreelanceProjectsScreen() {
+    val currencyDeps = currencyCompletionDependencies()
+    val currencyOwner = remember { currencyDeps.account().currentUid() }
+    val scope = rememberCoroutineScope()
+    var saving by remember { mutableStateOf(false) }
     val repository = remember {
         FreelanceProjectRepository()
     }
@@ -126,8 +135,15 @@ fun FreelanceProjectsScreen() {
 
     if (showAddDialog) {
         AddFreelanceProjectDialog(
+            saveError = errorMessage,
+            isSaving = saving,
             onDismiss = { showAddDialog = false },
             onSave = { name, client, amount, currency, rate, notes ->
+                if (saving) return@AddFreelanceProjectDialog
+                if (!currencyDeps.recorder().isOwner(currencyOwner)) {
+                    errorMessage = "Account changed. Reopen this form."
+                    return@AddFreelanceProjectDialog
+                }
                 val validationError = FreelanceProjectValidator.validate(
                     name = name,
                     client = client,
@@ -152,6 +168,8 @@ fun FreelanceProjectsScreen() {
                     return@AddFreelanceProjectDialog
                 }
 
+                val remembered = currencyDeps.recorder().capture(currency, "LKR", values.exchangeRate, currencyOwner)
+                saving = true
                 repository.addProject(
                     name = name,
                     client = client,
@@ -161,10 +179,13 @@ fun FreelanceProjectsScreen() {
                     baseAmountMinor = values.baseAmountMinor,
                     notes = notes,
                     onSuccess = {
+                        saving = false
+                        scope.launch { currencyDeps.recorder().afterSave(remembered) }
                         errorMessage = null
                         showAddDialog = false
                     },
                     onError = { message ->
+                        saving = false
                         errorMessage = message
                     }
                 )
@@ -214,6 +235,10 @@ private fun FreelanceProjectCard(
     project: FreelanceProject,
     onDelete: () -> Unit
 ) {
+    if (runCatching { project.completedAmountMinor }.isFailure) {
+        Text("Milestone total needs review: ${project.name}")
+        return
+    }
     val today = LocalDate.now().toString()
     val overdueCount = project.milestones.count { it.isOverdue(today) }
 
@@ -287,6 +312,8 @@ private fun FreelanceProjectCard(
 
 @Composable
 private fun AddFreelanceProjectDialog(
+    saveError: String?,
+    isSaving: Boolean,
     onDismiss: () -> Unit,
     onSave: (
         name: String,
@@ -313,6 +340,7 @@ private fun AddFreelanceProjectDialog(
             LazyColumn(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
+                item { saveError?.let { Text(it, color = MaterialTheme.colorScheme.error) } }
                 item {
                     OutlinedTextField(
                         value = name,
@@ -366,9 +394,7 @@ private fun AddFreelanceProjectDialog(
                                         text = { Text(option) },
                                         onClick = {
                                             currency = option
-                                            if (option == "LKR") {
-                                                rate = "1"
-                                            }
+                                            rate = if (option == "LKR") "1" else ""
                                             currencyMenuExpanded = false
                                         }
                                     )
@@ -378,16 +404,7 @@ private fun AddFreelanceProjectDialog(
                 }
 
                 item {
-                    OutlinedTextField(
-                        value = rate,
-                        onValueChange = { rate = it },
-                        label = {
-                            Text("Exchange rate to LKR")
-                        },
-                        enabled = currency != "LKR",
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
+                    CurrencyRateField(original = currency, value = rate, onChange = { rate = it }, enabled = !isSaving)
                 }
 
                 item {
@@ -411,6 +428,7 @@ private fun AddFreelanceProjectDialog(
         },
         confirmButton = {
             Button(
+                enabled = !isSaving,
                 onClick = {
                     val error = FreelanceProjectValidator.validate(
                         name = name,

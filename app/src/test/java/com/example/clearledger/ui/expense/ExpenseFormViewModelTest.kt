@@ -1,5 +1,7 @@
 package com.example.clearledger.ui.expense
 
+import com.example.clearledger.currency.testRateRecorder
+
 import androidx.lifecycle.SavedStateHandle
 import com.example.clearledger.core.common.Result
 import com.example.clearledger.domain.model.ExpenseCategory
@@ -75,7 +77,7 @@ class ExpenseFormViewModelTest {
         return ExpenseFormViewModel(
             handle, repo, categories,
             SaveExpenseUseCase(repo, ValidateExpenseInputUseCase()),
-            SuggestMerchantsUseCase()
+            SuggestMerchantsUseCase(), testRateRecorder()
         )
     }
 
