@@ -26,14 +26,18 @@ import com.example.clearledger.ui.auth.SplashViewModel
 import com.example.clearledger.ui.home.HomeScreen
 import com.example.clearledger.ui.home.HomeViewModel
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.ui.unit.dp
 import com.example.clearledger.navigation.RecurringRoutes
 import com.example.clearledger.navigation.recurringGraph
+import com.example.clearledger.profile.*
+import androidx.compose.runtime.key
 @Composable
 fun AppNavigation() {
+    val session: ProfileSessionViewModel = hiltViewModel()
+    val uid = session.uid.collectAsStateWithLifecycle().value
+    key(session.navigationSession, uid) {
     val navController = rememberNavController()
 
     NavHost(
@@ -48,32 +52,8 @@ fun AppNavigation() {
                 splashViewModel.splashState.collectAsStateWithLifecycle().value
 
             LaunchedEffect(state) {
-                when (state) {
-                    SplashState.NavigateHome -> {
-                        navController.navigate(Routes.HOME) {
-                            popUpTo(Routes.SPLASH) {
-                                inclusive = true
-                            }
-                        }
-                    }
-
-                    SplashState.NavigateLogin -> {
-                        navController.navigate(Routes.LOGIN) {
-                            popUpTo(Routes.SPLASH) {
-                                inclusive = true
-                            }
-                        }
-                    }
-
-                    SplashState.NavigateRegister -> {
-                        navController.navigate(Routes.REGISTER) {
-                            popUpTo(Routes.SPLASH) {
-                                inclusive = true
-                            }
-                        }
-                    }
-
-                    SplashState.Loading -> Unit
+                ProfileRoutes.splashDestination(state)?.let { destination ->
+                    navController.navigate(destination) { popUpTo(Routes.SPLASH) { inclusive = true } }
                 }
             }
 
@@ -81,7 +61,14 @@ fun AppNavigation() {
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
             ) {
-                CircularProgressIndicator()
+                if (state is SplashState.Error) {
+                    androidx.compose.foundation.layout.Column {
+                        Text(state.message)
+                        session.logoutError.collectAsStateWithLifecycle().value?.let { Text(it) }
+                        TextButton(onClick = splashViewModel::checkSession) { Text("Retry") }
+                        TextButton(onClick = session::logout) { Text("Log out") }
+                    }
+                } else CircularProgressIndicator()
             }
         }
 
@@ -99,8 +86,8 @@ fun AppNavigation() {
                     navController.navigate(Routes.REGISTER)
                 },
                 onNavigateHome = {
-                    navController.navigate(Routes.HOME) {
-                        popUpTo(Routes.LOGIN) {
+                    navController.navigate(ProfileRoutes.afterAuthSuccess()) {
+                        popUpTo(navController.graph.id) {
                             inclusive = true
                         }
                     }
@@ -122,13 +109,43 @@ fun AppNavigation() {
                     viewModel.retryProfileSetup()
                 },
                 onNavigateHome = {
-                    navController.navigate(Routes.HOME) {
-                        popUpTo(Routes.REGISTER) {
+                    navController.navigate(ProfileRoutes.afterAuthSuccess()) {
+                        popUpTo(navController.graph.id) {
                             inclusive = true
                         }
                     }
                 }
             )
+        }
+
+        composable(ProfileRoutes.ONBOARDING) {
+            val setup: ProfileSetupViewModel = hiltViewModel()
+            val setupState = setup.state.collectAsStateWithLifecycle().value
+            LaunchedEffect(setupState) {
+                if (setupState is ProfileSetupState.Completed) {
+                    navController.navigate(ProfileRoutes.afterSave()) { popUpTo(navController.graph.id) { inclusive = true } }
+                }
+                if (setupState is ProfileSetupState.SignedOut) {
+                    navController.navigate(Routes.LOGIN) { popUpTo(navController.graph.id) { inclusive = true } }
+                }
+            }
+            ProfileSetupScreen(setupState, setup::editName, setup::editCurrency, setup::save,
+                setup::retry, setup::reload, setup::logout)
+        }
+        composable(ProfileRoutes.EDIT) {
+            val edit: ProfileEditViewModel = hiltViewModel()
+            val editState = edit.state.collectAsStateWithLifecycle().value
+            LaunchedEffect(editState) {
+                if (editState is ProfileSetupState.Completed) {
+                    navController.navigate(ProfileRoutes.afterSave()) { popUpTo(Routes.HOME) { inclusive = true } }
+                }
+                if (editState is ProfileSetupState.SignedOut) {
+                    navController.navigate(Routes.LOGIN) { popUpTo(navController.graph.id) { inclusive = true } }
+                }
+            }
+            ProfileSetupScreen(editState, edit::editName, edit::editCurrency, edit::save,
+                edit::retry, edit::reload, edit::logout, editMode = true,
+                onBack = { navController.popBackStack() })
         }
 
         composable(Routes.HOME) {
@@ -152,6 +169,7 @@ fun AppNavigation() {
                         horizontalArrangement =
                             androidx.compose.foundation.layout.Arrangement.Center
                     ) {
+                        TextButton(onClick = { navController.navigate(ProfileRoutes.EDIT) }) { Text("Profile") }
                         TextButton(
                             onClick = {
                                 navController.navigate(ExpenseRoutes.LIST)
@@ -186,4 +204,5 @@ fun AppNavigation() {
             }
         }
     }
+}
 }

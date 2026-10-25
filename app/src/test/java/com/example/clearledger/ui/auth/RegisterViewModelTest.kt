@@ -65,7 +65,7 @@ class RegisterViewModelTest {
     }
 
     @Test
-    fun startupCheck_incompleteProfile_setsErrorWithCanRetryTrue() = runTest {
+    fun startupCheck_incompleteProfile_routesToSetupResolution() = runTest {
         authRepository.checkResultToReturn = Result.Success(
             AuthRepository.SetupStatus.Incomplete(User("789", "incomplete@example.com"))
         )
@@ -73,8 +73,8 @@ class RegisterViewModelTest {
         testDispatcher.scheduler.advanceUntilIdle()
 
         val state = viewModel.registerState.value
-        assertTrue(state is UiState.Error)
-        assertTrue((state as UiState.Error).canRetryProfile)
+        assertTrue(state is UiState.Success)
+        assertEquals("789", (state as UiState.Success).data.uid)
     }
 
     @Test
