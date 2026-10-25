@@ -1,12 +1,20 @@
 package com.example.clearledger.ui.income
 
+import kotlinx.coroutines.test.setMain
+import kotlinx.coroutines.test.resetMain
+
+import com.example.clearledger.currency.testRateRecorder
+
 import com.example.clearledger.data.repository.IncomeEntryRepository
 import com.example.clearledger.domain.model.IncomeEntry
 import com.example.clearledger.domain.model.IncomeSource
 import org.junit.Assert.*
 import org.junit.Test
 
+@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class IncomeEntriesViewModelTest {
+    @org.junit.Before fun mainDispatcher() { kotlinx.coroutines.Dispatchers.setMain(kotlinx.coroutines.test.UnconfinedTestDispatcher()) }
+    @org.junit.After fun resetDispatcher() { kotlinx.coroutines.Dispatchers.resetMain() }
 
     private class FakeRepository : IncomeEntryRepository {
         val saved = mutableListOf<IncomeEntry>()
@@ -63,7 +71,7 @@ class IncomeEntriesViewModelTest {
     fun foreignIncomeSavesConvertedAmountAndStatus() {
         for (status in listOf("EXPECTED", "RECEIVED")) {
             val repository = FakeRepository()
-            val viewModel = IncomeEntriesViewModel(repository)
+            val viewModel = IncomeEntriesViewModel(repository, testRateRecorder())
 
             save(viewModel, status = status)
 
@@ -82,7 +90,7 @@ class IncomeEntriesViewModelTest {
     @Test
     fun lkrIncomeUsesIdentityRate() {
         val repository = FakeRepository()
-        val viewModel = IncomeEntriesViewModel(repository)
+        val viewModel = IncomeEntriesViewModel(repository, testRateRecorder())
 
         save(viewModel, currency = "LKR", rate = "")
 
@@ -94,7 +102,7 @@ class IncomeEntriesViewModelTest {
     @Test
     fun excessPrecisionDoesNotReachRepository() {
         val repository = FakeRepository()
-        val viewModel = IncomeEntriesViewModel(repository)
+        val viewModel = IncomeEntriesViewModel(repository, testRateRecorder())
 
         save(viewModel, amount = "1.234")
 
@@ -107,7 +115,7 @@ class IncomeEntriesViewModelTest {
     fun invalidRatesDoNotReachRepository() {
         for (rate in listOf("", "0", "-1", "abc")) {
             val repository = FakeRepository()
-            val viewModel = IncomeEntriesViewModel(repository)
+            val viewModel = IncomeEntriesViewModel(repository, testRateRecorder())
 
             save(viewModel, rate = rate)
 
@@ -120,7 +128,7 @@ class IncomeEntriesViewModelTest {
     fun overflowAndRoundedZeroDoNotReachRepository() {
         for (rate in listOf("1000000000000000000", "0.000000001")) {
             val repository = FakeRepository()
-            val viewModel = IncomeEntriesViewModel(repository)
+            val viewModel = IncomeEntriesViewModel(repository, testRateRecorder())
 
             save(viewModel, rate = rate)
 
@@ -132,7 +140,7 @@ class IncomeEntriesViewModelTest {
     @Test
     fun editingPreservesRecordIdentityAndCreationTime() {
         val repository = FakeRepository()
-        val viewModel = IncomeEntriesViewModel(repository)
+        val viewModel = IncomeEntriesViewModel(repository, testRateRecorder())
         val existing = IncomeEntry(
             id = "existing-entry",
             createdAt = 1234L

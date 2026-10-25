@@ -42,12 +42,14 @@ import java.math.BigDecimal
 import java.text.NumberFormat
 import java.time.LocalDate
 import java.util.Locale
+import com.example.clearledger.currency.CurrencyRateField
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun IncomeEntriesScreen(
     onBack: () -> Unit,
-    viewModel: IncomeEntriesViewModel = viewModel()
+    viewModel: IncomeEntriesViewModel = hiltViewModel()
 ) {
     val state = viewModel.state
     var editingEntry by remember { mutableStateOf<IncomeEntry?>(null) }
@@ -327,22 +329,23 @@ private fun IncomeEntryEditorDialog(
                     selected = currency,
                     options = IncomeEntryOptions.currencies,
                     onSelect = {
-                        currency = it
-                        if (it == "LKR") rate = "1"
-                        else if (rate == "1") rate = ""
+                        if (currency != it) {
+                            currency = it
+                            rate = if (it == "LKR") "1" else ""
+                        }
                     }
                 )
 
                 if (currency != "LKR") {
-                    OutlinedTextField(
+                    CurrencyRateField(
+                        original = currency,
+                        base = "LKR",
                         value = rate,
-                        onValueChange = { rate = it },
-                        label = { Text("Exchange rate (LKR per 1 $currency)") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
+                        onChange = { rate = it },
+                        editing = entry != null,
+                        enabled = !isSaving
                     )
                 }
-
                 OutlinedTextField(
                     value = date,
                     onValueChange = { date = it },

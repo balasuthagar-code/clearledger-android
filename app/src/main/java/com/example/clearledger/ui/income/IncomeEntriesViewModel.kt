@@ -1,6 +1,12 @@
 
 package com.example.clearledger.ui.income
 
+import com.example.clearledger.currency.ConfirmedRateRecorder
+import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
+import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.launch
+
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -17,10 +23,12 @@ import com.example.clearledger.core.common.Result
 import com.example.clearledger.data.repository.IncomeEntryRepository
 
 
-class IncomeEntriesViewModel(
-    private val repository: IncomeEntryRepository =
-        FirestoreIncomeEntryRepository()
+@HiltViewModel
+class IncomeEntriesViewModel @Inject constructor(
+    private val repository: IncomeEntryRepository,
+    private val rateRecorder: ConfirmedRateRecorder
 ) : ViewModel() {
+    private val currencyOwner = rateRecorder.ownerUid()
 
     var state by mutableStateOf(IncomeEntriesUiState())
         private set
@@ -73,6 +81,11 @@ class IncomeEntriesViewModel(
         note: String,
         status: String
     ) {
+        if (state.isSaving) return
+        if (!rateRecorder.isOwner(currencyOwner)) {
+            state = state.copy(error = "Account changed. Reopen this form.")
+            return
+        }
         val amountMinor = when (
             val result = CurrencyCore.parseAmount(amountText, currency)
         ) {
@@ -156,7 +169,9 @@ class IncomeEntriesViewModel(
             }
         }
 
-        val rate = conversion.appliedRatePlain
+        val unchangedMoney = existing != null && existing.originalCurrency == currency &&
+            existing.originalAmountMinor == amountMinor && existing.exchangeRate.toBigDecimalOrNull()?.compareTo(conversion.appliedRate) == 0
+        val rate = if (unchangedMoney) existing!!.exchangeRate else conversion.appliedRatePlain
 
         val entry = IncomeEntry(
             id = existing?.id ?: "",
@@ -164,7 +179,7 @@ class IncomeEntriesViewModel(
             originalAmountMinor = amountMinor,
             originalCurrency = currency,
             exchangeRate = rate,
-            baseAmountMinor = conversion.baseAmountMinor,
+            baseAmountMinor = if (unchangedMoney) existing!!.baseAmountMinor else conversion.baseAmountMinor,
             date = date.trim(),
             monthKey = try {
                 IncomeEntryValidator.monthKey(date.trim())
@@ -185,9 +200,11 @@ class IncomeEntriesViewModel(
 
         state = state.copy(isSaving = true, error = null, message = null)
 
+        val remembered = if (existing == null || !unchangedMoney) rateRecorder.capture(currency, baseCurrency, rate, currencyOwner) else null
         repository.saveEntry(entry) { result ->
             result.fold(
                 onSuccess = {
+                    viewModelScope.launch { rateRecorder.afterSave(remembered) }
                     state = state.copy(
                         isSaving = false,
                         message = if (existing == null) {
