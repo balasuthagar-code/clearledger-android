@@ -68,11 +68,14 @@ class FirestoreIncomeSourceRepository(
 
                             val matchingAmounts = linkedEntries.mapNotNull { entry ->
                                 val currency =
-                                    entry.getString("currency")
+                                    entry.getString("originalCurrency")
+                                        ?: entry.getString("currency")
                                         ?: source.defaultCurrency
 
-                                val amount = (entry.get("amount") as? Number)
-                                    ?.toDouble()
+                                val amountMinor =
+                                    (entry.get("originalAmountMinor") as? Number)?.toLong()
+                                        ?: (entry.get("amountMinor") as? Number)?.toLong()
+                                val amount = amountMinor?.toDouble()?.div(100.0)
 
                                 if (
                                     currency == source.defaultCurrency &&

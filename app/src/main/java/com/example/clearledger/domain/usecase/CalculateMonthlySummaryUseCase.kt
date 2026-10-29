@@ -22,7 +22,8 @@ class CalculateMonthlySummaryUseCase @Inject constructor() {
         receivedIncomeBaseMinor: List<Long>,
         expenses: List<Expense>
     ): MonthlySummary {
-        val monthExpenses = expenses.filter { it.monthKey == monthKey }
+        val monthExpenses = expenses
+            .filter { it.monthKey == monthKey }
 
         val totalIncome = receivedIncomeBaseMinor.sum()
         val totalExpenses = monthExpenses.sumOf { it.baseAmountMinor }
@@ -55,4 +56,5 @@ class CalculateMonthlySummaryUseCase @Inject constructor() {
             categoryTotals = categoryTotals
         )
     }
+
 }

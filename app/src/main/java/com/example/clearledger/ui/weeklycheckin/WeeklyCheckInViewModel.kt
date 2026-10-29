@@ -5,6 +5,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.clearledger.data.repository.WeeklyCheckInRepository
 import com.example.clearledger.domain.model.WeeklyCheckIn
+import com.example.clearledger.domain.repository.ExpenseRepository
+import com.example.clearledger.domain.repository.IncomeSummarySource
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.time.DayOfWeek
 import java.time.LocalDate
@@ -13,10 +15,14 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.combine
+import com.example.clearledger.core.common.MonthKey
 
 @HiltViewModel
 class WeeklyCheckInViewModel @Inject constructor(
-    private val repository: WeeklyCheckInRepository
+    private val repository: WeeklyCheckInRepository,
+    private val expenseRepository: ExpenseRepository,
+    private val incomeSummarySource: IncomeSummarySource
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(WeeklyCheckInUiState())
@@ -31,10 +37,18 @@ class WeeklyCheckInViewModel @Inject constructor(
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
 
             try {
-                repository.getWeeklyCheckIns().collect { checkIns ->
+                val monthKey = MonthKey.current()
+                combine(
+                    repository.getWeeklyCheckIns(),
+                    expenseRepository.observeExpensesForMonth(monthKey),
+                    incomeSummarySource.observeReceivedBaseAmounts(monthKey)
+                ) { checkIns, expenses, income ->
+                    checkIns to (income.sum() - expenses.sumOf { it.baseAmountMinor })
+                }.collect { (checkIns, expectedBalance) ->
                     _uiState.update {
                         it.copy(
                             checkIns = checkIns,
+                            expectedBalanceMinor = expectedBalance,
                             isLoading = false
                         )
                     }

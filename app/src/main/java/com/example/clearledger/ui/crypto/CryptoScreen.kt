@@ -47,8 +47,36 @@ fun CryptoScreen(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     var showAddDialog by remember { mutableStateOf(false) }
-    var entryToDelete by remember { mutableStateOf<CryptoEntry?>(null) }
-    LaunchedEffect(state.message) { if (state.message == "Crypto entry saved.") showAddDialog = false }
+    var holdingToDelete by remember { mutableStateOf<CryptoHolding?>(null) }
+    var detailsHolding by remember { mutableStateOf<CryptoHolding?>(null) }
+    var sellHolding by remember { mutableStateOf<CryptoHolding?>(null) }
+    val holdings = state.entries
+        .groupBy { it.assetName.trim().lowercase() }
+        .values
+        .mapNotNull { entries ->
+            val quantity = entries.fold(BigDecimal.ZERO) { total, entry ->
+                val value = entry.quantity.toBigDecimalOrNull() ?: BigDecimal.ZERO
+                if (entry.type == CryptoEntryType.BUY) total + value else total - value
+            }
+            if (quantity <= BigDecimal.ZERO) {
+                null
+            } else {
+                CryptoHolding(
+                    assetName = entries.first().assetName,
+                    quantity = quantity,
+                    purchaseCostMinor = entries
+                        .filter { it.type == CryptoEntryType.BUY }
+                        .sumOf { it.baseValueMinor },
+                    entries = entries.sortedByDescending { it.date }
+                )
+            }
+        }
+    LaunchedEffect(state.message) {
+        if (state.message == "Crypto entry saved.") {
+            showAddDialog = false
+            sellHolding = null
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -79,7 +107,7 @@ fun CryptoScreen(
             onClick = { showAddDialog = true },
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text("Add Crypto Entry")
+            Text("Buy Cryptocurrency")
         }
 
         state.error?.let {
@@ -106,20 +134,34 @@ fun CryptoScreen(
             }
 
             state.entries.isEmpty() -> {
-                Text("No cryptocurrency entries yet. Add your first entry.")
+                Text("No cryptocurrency holdings or transactions yet.")
             }
 
             else -> {
                 LazyColumn(
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
+                    if (holdings.isNotEmpty()) {
+                        item { Text("Active holdings", style = MaterialTheme.typography.titleMedium) }
+                        items(holdings, key = { "holding_${it.assetName.lowercase()}" }) { holding ->
+                            CryptoHoldingCard(
+                                holding = holding,
+                                onDetails = { detailsHolding = holding },
+                                onSell = { sellHolding = holding },
+                                onDelete = { holdingToDelete = holding }
+                            )
+                        }
+                        item { Text("Transaction history", style = MaterialTheme.typography.titleMedium) }
+                    }
                     items(
                         items = state.entries,
                         key = { it.id }
                     ) { entry ->
                         CryptoEntryCard(
                             entry = entry,
-                            onDelete = { entryToDelete = entry }
+                            onDelete = { holdingToDelete = holdings.firstOrNull {
+                                it.entries.any { holdingEntry -> holdingEntry.id == entry.id }
+                            } }
                         )
                     }
                 }
@@ -132,14 +174,13 @@ fun CryptoScreen(
             saveError = state.error,
             isSaving = state.isSaving,
             onDismiss = { showAddDialog = false },
-            onSave = { asset, date, type, amount, currency, rate, costBasis, note ->
-                val previousError = state.error
-
+            onSave = { asset, date, type, amount, quantity, currency, rate, costBasis, note ->
                 viewModel.addEntry(
                     assetName = asset,
                     date = date,
                     type = type,
                     originalValue = amount,
+                    quantity = quantity,
                     currency = currency,
                     rate = rate,
                     costBasisLkr = costBasis,
@@ -151,29 +192,90 @@ fun CryptoScreen(
         )
     }
 
-    entryToDelete?.let { entry ->
+    holdingToDelete?.let { holding ->
         AlertDialog(
-            onDismissRequest = { entryToDelete = null },
-            title = { Text("Delete entry?") },
+            onDismissRequest = { holdingToDelete = null },
+            title = { Text("Delete holding?") },
             text = {
-                Text("Delete the ${entry.assetName} entry dated ${entry.date}?")
+                Text(
+                    "Delete ${holding.assetName}, its ${holding.entries.size} transaction(s), " +
+                        "and linked cryptocurrency income or expense records?"
+                )
             },
             confirmButton = {
                 TextButton(
                     onClick = {
-                        viewModel.deleteEntry(entry.id)
-                        entryToDelete = null
+                        viewModel.deleteHolding(holding)
+                        holdingToDelete = null
                     }
                 ) {
                     Text("Delete")
                 }
             },
             dismissButton = {
-                TextButton(onClick = { entryToDelete = null }) {
+                TextButton(onClick = { holdingToDelete = null }) {
                     Text("Cancel")
                 }
             }
         )
+    }
+
+    detailsHolding?.let { holding ->
+        AlertDialog(
+            onDismissRequest = { detailsHolding = null },
+            title = { Text("${holding.assetName} details") },
+            text = {
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    item { Text("Quantity owned: ${holding.quantity.stripTrailingZeros().toPlainString()}") }
+                    item { Text("Purchase cost: LKR ${formatMinor(holding.purchaseCostMinor)}") }
+                    item { Text("Transaction history") }
+                    items(holding.entries, key = { "detail_${it.id}" }) { entry ->
+                        Text("${entry.type}: ${entry.quantity} for LKR ${formatMinor(entry.baseValueMinor)} (${entry.date})")
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { detailsHolding = null }) { Text("Close") }
+            }
+        )
+    }
+
+    sellHolding?.let { holding ->
+        AddCryptoEntryDialog(
+            initialAsset = holding.assetName,
+            initialType = CryptoEntryType.SELL,
+            availableQuantity = holding.quantity,
+            saveError = state.error,
+            isSaving = state.isSaving,
+            onDismiss = { sellHolding = null },
+            onSave = { asset, date, type, amount, quantity, currency, rate, costBasis, note ->
+                viewModel.addEntry(asset, date, type, amount, quantity, currency, rate, costBasis, note)
+            }
+        )
+    }
+}
+
+@Composable
+private fun CryptoHoldingCard(
+    holding: CryptoHolding,
+    onDetails: () -> Unit,
+    onSell: () -> Unit,
+    onDelete: () -> Unit
+) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(14.dp)) {
+            Text(holding.assetName, style = MaterialTheme.typography.titleMedium)
+            Text("Quantity owned: ${holding.quantity.stripTrailingZeros().toPlainString()}")
+            Text("Purchase cost: LKR ${formatMinor(holding.purchaseCostMinor)}")
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End
+            ) {
+                TextButton(onClick = onDetails) { Text("View Details") }
+                TextButton(onClick = onSell) { Text("Sell") }
+                TextButton(onClick = onDelete) { Text("Delete") }
+            }
+        }
     }
 }
 
@@ -239,6 +341,9 @@ private fun CryptoEntryCard(
 
 @Composable
 private fun AddCryptoEntryDialog(
+    initialAsset: String = "",
+    initialType: String = CryptoEntryType.BUY,
+    availableQuantity: BigDecimal? = null,
     saveError: String?,
     isSaving: Boolean,
     onDismiss: () -> Unit,
@@ -247,16 +352,18 @@ private fun AddCryptoEntryDialog(
         date: String,
         type: String,
         amount: String,
+        quantity: String,
         currency: String,
         rate: String,
         costBasis: String,
         note: String
     ) -> Unit
 ) {
-    var asset by remember { mutableStateOf("") }
+    var asset by remember(initialAsset) { mutableStateOf(initialAsset) }
     var date by remember { mutableStateOf(LocalDate.now().toString()) }
-    var type by remember { mutableStateOf(CryptoEntryType.BUY) }
+    var type by remember(initialType) { mutableStateOf(initialType) }
     var amount by remember { mutableStateOf("") }
+    var quantity by remember(initialAsset) { mutableStateOf("") }
     var currency by remember { mutableStateOf("LKR") }
     var rate by remember { mutableStateOf("1") }
     var costBasis by remember { mutableStateOf("") }
@@ -273,6 +380,22 @@ private fun AddCryptoEntryDialog(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 item { saveError?.let { Text(it, color = MaterialTheme.colorScheme.error) } }
+                item {
+                    if (availableQuantity != null) {
+                        Text("Available quantity: ${availableQuantity.stripTrailingZeros().toPlainString()}")
+                    }
+                }
+
+                item {
+                    OutlinedTextField(
+                        value = quantity,
+                        onValueChange = { quantity = it },
+                        label = { Text("Quantity") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+
                 item {
                     OutlinedTextField(
                         value = asset,
@@ -306,7 +429,7 @@ private fun AddCryptoEntryDialog(
                             expanded = typeMenuExpanded,
                             onDismissRequest = { typeMenuExpanded = false }
                         ) {
-                            CryptoEntryType.values.forEach { option ->
+                            listOf(CryptoEntryType.BUY, CryptoEntryType.SELL).forEach { option ->
                                 DropdownMenuItem(
                                     text = { Text(option) },
                                     onClick = {
@@ -413,6 +536,7 @@ private fun AddCryptoEntryDialog(
                             date,
                             type,
                             amount,
+                            quantity,
                             currency,
                             rate,
                             costBasis,

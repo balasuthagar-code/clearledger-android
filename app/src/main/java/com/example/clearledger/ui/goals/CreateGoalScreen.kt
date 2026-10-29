@@ -16,6 +16,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -29,7 +30,8 @@ import com.example.clearledger.domain.model.SavingsGoal
 
 @Composable
 fun CreateGoalScreen(
-    viewModel: SavingsGoalsViewModel = hiltViewModel()
+    viewModel: SavingsGoalsViewModel = hiltViewModel(),
+    onOpenContributions: () -> Unit = {}
 ) {
     val state by viewModel.uiState.collectAsState()
 
@@ -123,6 +125,13 @@ fun CreateGoalScreen(
             Text(
                 if (state.isSaving) "Saving..." else "Create Goal"
             )
+        }
+
+        TextButton(
+            onClick = onOpenContributions,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Manage contributions")
         }
 
         Spacer(modifier = Modifier.height(20.dp))

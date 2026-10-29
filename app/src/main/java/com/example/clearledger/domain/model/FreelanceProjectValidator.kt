@@ -1,6 +1,8 @@
 package com.example.clearledger.core.common
 
 import java.math.BigDecimal
+import java.time.LocalDate
+import com.example.clearledger.domain.model.FreelanceProjectStatus
 
 object FreelanceProjectValidator {
 
@@ -146,6 +148,32 @@ object FreelanceProjectValidator {
             return "Please select a due date."
         }
 
+        return null
+    }
+
+    fun validateDetails(
+        startDate: String,
+        endDate: String,
+        status: String,
+        workDescription: String
+    ): String? {
+        val start = runCatching { LocalDate.parse(startDate) }.getOrNull()
+            ?: return "Please enter a valid start date."
+        val end = runCatching { LocalDate.parse(endDate) }.getOrNull()
+            ?: return "Please enter a valid end date."
+        if (end.isBefore(start)) return "The end date cannot be before the start date."
+        if (status !in FreelanceProjectStatus.values) return "Please select a valid project status."
+        if (workDescription.isBlank()) return "Please describe the project work or deliverables."
+        return null
+    }
+
+    fun validatePayment(amount: String, date: String): String? {
+        val parsed = CurrencyCore.parseAmount(amount, "LKR")
+        if (parsed !is Result.Success || parsed.data <= 0L) {
+            return "Enter a payment amount greater than zero."
+        }
+        runCatching { LocalDate.parse(date) }.getOrNull()
+            ?: return "Please enter a valid payment date."
         return null
     }
 }

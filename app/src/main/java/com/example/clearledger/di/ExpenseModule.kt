@@ -1,9 +1,9 @@
 package com.example.clearledger.di
 
-import com.example.clearledger.data.fake.FakeIncomeSummarySource
-import com.example.clearledger.data.fake.FakePrimaryGoalSource
 import com.example.clearledger.data.repository.FirestoreCategoryRepository
 import com.example.clearledger.data.repository.FirestoreExpenseRepository
+import com.example.clearledger.data.repository.FirestoreIncomeSummarySource
+import com.example.clearledger.data.repository.FirestoreSavingsGoalRepository
 import com.example.clearledger.domain.repository.CategoryRepository
 import com.example.clearledger.domain.repository.ExpenseRepository
 import com.example.clearledger.domain.repository.IncomeSummarySource
@@ -31,14 +31,11 @@ abstract class ExpenseModule {
     @Singleton
     abstract fun bindExpenseRepository(impl: FirestoreExpenseRepository): ExpenseRepository
 
-    // TEMPORARY until the income field names are verified (see the Part 2 guide, step 5): then change
-    // FakeIncomeSummarySource to FirestoreIncomeSummarySource (it already exists in data/repository).
     @Binds
     @Singleton
-    abstract fun bindIncomeSummarySource(impl: FakeIncomeSummarySource): IncomeSummarySource
+    abstract fun bindIncomeSummarySource(impl: FirestoreIncomeSummarySource): IncomeSummarySource
 
-    // TEMPORARY until Member 2 implements PrimaryGoalSource on the real goal repository.
     @Binds
     @Singleton
-    abstract fun bindPrimaryGoalSource(impl: FakePrimaryGoalSource): PrimaryGoalSource
+    abstract fun bindPrimaryGoalSource(impl: FirestoreSavingsGoalRepository): PrimaryGoalSource
 }

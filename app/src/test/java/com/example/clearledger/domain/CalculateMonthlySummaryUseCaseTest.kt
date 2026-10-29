@@ -107,4 +107,27 @@ class CalculateMonthlySummaryUseCaseTest {
         val s = calculate(month, emptyList(), listOf(usd))
         assertEquals(3_005_000L, s.totalExpensesMinor)   // LKR 30,050.00, not USD 100.00
     }
+
+    @Test
+    fun cryptocurrencyPurchaseExpense_isIncludedInOrdinaryTotals() {
+        val crypto = expense(3_000_000, "cryptocurrency", DISCRETIONARY)
+        val ordinary = expense(500_000, "food", DISCRETIONARY)
+
+        val s = calculate(month, emptyList(), listOf(crypto, ordinary))
+
+        assertEquals(3_500_000L, s.totalExpensesMinor)
+        assertEquals(3_500_000L, s.discretionaryMinor)
+        assertEquals(listOf("cryptocurrency", "food"), s.categoryTotals.map { it.categoryId })
+    }
+
+    @Test
+    fun cryptoLabelInExpenseNote_isIncludedWhenItIsAnActualExpense() {
+        val crypto = expense(3_000_000, "other", DISCRETIONARY)
+            .copy(note = "Cryptocurrency investment")
+        val ordinary = expense(500_000, "food", DISCRETIONARY)
+
+        val s = calculate(month, emptyList(), listOf(crypto, ordinary))
+
+        assertEquals(3_500_000L, s.totalExpensesMinor)
+    }
 }
