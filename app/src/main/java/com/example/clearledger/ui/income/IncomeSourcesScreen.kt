@@ -48,7 +48,8 @@ import java.util.Locale
 @Composable
 fun IncomeSourcesScreen(
     viewModel: IncomeSourcesViewModel,
-    onBack: () -> Unit = {}
+    onBack: () -> Unit = {},
+    onOpenEntries: () -> Unit = {}
 ) {
     val state = viewModel.state
 
@@ -97,6 +98,13 @@ fun IncomeSourcesScreen(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text("+ Add Income Source")
+            }
+
+            TextButton(
+                onClick = onOpenEntries,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Manage income entries")
             }
 
             Spacer(Modifier.height(12.dp))

@@ -6,6 +6,11 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.SetOptions
+import com.google.firebase.Timestamp
+import kotlinx.coroutines.tasks.await
+import java.time.LocalDate
+import java.time.ZoneId
+import java.util.Date
 
 class FreelanceProjectRepository(
     private val auth: FirebaseAuth = FirebaseAuth.getInstance(),
@@ -57,6 +62,14 @@ class FreelanceProjectRepository(
                         userId = document.getString("userId") ?: "",
                         name = document.getString("name") ?: "",
                         client = document.getString("client") ?: "",
+                        clientContact = document.getString("clientContact") ?: "",
+                        description = document.getString("description") ?: "",
+                        startDate = document.getString("startDate") ?: "",
+                        endDate = document.getString("endDate") ?: "",
+                        workDescription = document.getString("workDescription") ?: "",
+                        status = document.getString("status") ?: "PLANNED",
+                        paymentStatus = document.getString("paymentStatus") ?: "UNPAID",
+                        totalPaidBaseMinor = document.getLong("totalPaidBaseMinor") ?: 0L,
                         agreedAmountMinor = document.getLong("agreedAmountMinor") ?: 0L,
                         currency = document.getString("currency") ?: "LKR",
                         exchangeRate = document.getString("exchangeRate") ?: "1",
@@ -78,6 +91,12 @@ class FreelanceProjectRepository(
     fun addProject(
         name: String,
         client: String,
+        clientContact: String = "",
+        description: String = "",
+        startDate: String = "",
+        endDate: String = "",
+        workDescription: String = "",
+        status: String = "PLANNED",
         agreedAmountMinor: Long,
         currency: String,
         exchangeRate: String,
@@ -106,6 +125,14 @@ class FreelanceProjectRepository(
             "userId" to user.uid,
             "name" to name.trim(),
             "client" to client.trim(),
+            "clientContact" to clientContact.trim(),
+            "description" to description.trim(),
+            "startDate" to startDate,
+            "endDate" to endDate,
+            "workDescription" to workDescription.trim(),
+            "status" to status,
+            "paymentStatus" to "UNPAID",
+            "totalPaidBaseMinor" to 0L,
             "agreedAmountMinor" to agreedAmountMinor,
             "currency" to currency,
             "exchangeRate" to exchangeRate,
@@ -122,6 +149,63 @@ class FreelanceProjectRepository(
                 onError(error.localizedMessage ?: "Unable to save the project.")
             }
     }
+
+    suspend fun recordPayment(
+                project: FreelanceProject,
+                amountMinor: Long,
+                paymentDate: String,
+                note: String
+            ) {
+                val user = auth.currentUser ?: error("Please sign in before recording payment.")
+                val projects = projectsCollection() ?: error("Please sign in before recording payment.")
+                val projectRef = projects.document(project.id)
+                val paymentId = "${project.id}_${paymentDate}_${amountMinor}"
+                val paymentRef = projectRef.collection("payments").document(paymentId)
+                val incomeRef = db.collection("users").document(user.uid)
+                    .collection("incomeEntries").document("freelance_$paymentId")
+                val sourceRef = db.collection("users").document(user.uid)
+                    .collection("incomeSources").document("freelance")
+                val date = Timestamp(Date.from(LocalDate.parse(paymentDate)
+                    .atStartOfDay(ZoneId.systemDefault()).toInstant()))
+
+                db.runTransaction { transaction ->
+                    if (transaction.get(paymentRef).exists() || transaction.get(incomeRef).exists()) {
+                        throw IllegalStateException("This payment has already been recorded.")
+                    }
+                    val current = transaction.get(projectRef)
+                    val paid = (current.getLong("totalPaidBaseMinor") ?: 0L) + amountMinor
+                    val agreed = current.getLong("baseAmountMinor") ?: project.baseAmountMinor
+                    val status = when {
+                        paid >= agreed -> "PAID"
+                        paid > 0L -> "PARTIALLY_PAID"
+                        else -> "UNPAID"
+                    }
+                    transaction.set(paymentRef, mapOf(
+                        "id" to paymentId, "projectId" to project.id, "userId" to user.uid,
+                        "amountMinor" to amountMinor, "date" to date, "note" to note.trim(),
+                        "createdAt" to System.currentTimeMillis()
+                    ))
+                    transaction.set(projectRef, mapOf(
+                        "totalPaidBaseMinor" to paid, "paymentStatus" to status,
+                        "updatedAt" to System.currentTimeMillis()
+                    ), SetOptions.merge())
+                    transaction.set(sourceRef, mapOf(
+                        "userId" to user.uid, "name" to "Freelance Projects", "type" to "FREELANCE",
+                        "defaultCurrency" to "LKR", "isActive" to true,
+                        "createdAt" to System.currentTimeMillis(), "updatedAt" to System.currentTimeMillis()
+                    ), SetOptions.merge())
+                    transaction.set(incomeRef, mapOf(
+                        "userId" to user.uid, "sourceId" to "freelance",
+                        "originalAmountMinor" to amountMinor, "originalCurrency" to "LKR",
+                        "exchangeRate" to "1", "baseAmountMinor" to amountMinor, "date" to date,
+                        "monthKey" to paymentDate.take(7), "status" to "RECEIVED",
+                        "note" to "Freelance payment: ${project.name}. ${note.trim()}",
+                        "freelanceProjectId" to project.id, "freelancePaymentId" to paymentId,
+                        "createdAt" to System.currentTimeMillis(), "updatedAt" to System.currentTimeMillis()
+                    ))
+                    null
+                }.await()
+            }
 
     fun updateMilestones(
         projectId: String,
@@ -160,6 +244,35 @@ class FreelanceProjectRepository(
             }
     }
 
+    fun updateProjectStatus(
+        projectId: String,
+        status: String,
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit
+    ) {
+        val collection = projectsCollection()
+        if (collection == null) {
+            onError("Please sign in before updating the project.")
+            return
+        }
+        if (status !in com.example.clearledger.domain.model.FreelanceProjectStatus.values) {
+            onError("Please select a valid project status.")
+            return
+        }
+
+        collection.document(projectId)
+            .update(
+                mapOf(
+                    "status" to status,
+                    "updatedAt" to System.currentTimeMillis()
+                )
+            )
+            .addOnSuccessListener { onSuccess() }
+            .addOnFailureListener { error ->
+                onError(error.localizedMessage ?: "Unable to update project status.")
+            }
+    }
+
     fun deleteProject(
         projectId: String,
         onSuccess: () -> Unit,
@@ -178,9 +291,8 @@ class FreelanceProjectRepository(
             .addOnFailureListener { error ->
                 onError(error.localizedMessage ?: "Unable to delete the project.")
             }
+        }
     }
-}
-
 private object FreelanceMilestoneDefaults {
     const val PENDING = "Pending"
 }

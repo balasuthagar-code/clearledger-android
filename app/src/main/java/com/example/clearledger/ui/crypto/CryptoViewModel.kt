@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.math.BigDecimal
 
 data class CryptoUiState(
     val isLoading: Boolean = true,
@@ -24,6 +25,13 @@ data class CryptoUiState(
     val entries: List<CryptoEntry> = emptyList(),
     val error: String? = null,
     val message: String? = null
+)
+
+data class CryptoHolding(
+    val assetName: String,
+    val quantity: BigDecimal,
+    val purchaseCostMinor: Long,
+    val entries: List<CryptoEntry>
 )
 
 @HiltViewModel
@@ -71,6 +79,7 @@ class CryptoViewModel @Inject constructor(
         date: String,
         type: String,
         originalValue: String,
+        quantity: String,
         currency: String,
         rate: String,
         costBasisLkr: String,
@@ -98,6 +107,25 @@ class CryptoViewModel @Inject constructor(
             )
             return
         }
+        val parsedQuantity = quantity.toBigDecimalOrNull()
+        if (parsedQuantity == null || parsedQuantity <= BigDecimal.ZERO) {
+            _uiState.value = _uiState.value.copy(error = "Enter a quantity greater than zero.")
+            return
+        }
+        val holding = _uiState.value.entries
+            .filter { it.assetName.equals(assetName.trim(), ignoreCase = true) }
+            .fold(BigDecimal.ZERO) { total, item ->
+                val itemQuantity = item.quantity.toBigDecimalOrNull() ?: BigDecimal.ZERO
+                if (item.type == CryptoEntryType.BUY) total + itemQuantity else total - itemQuantity
+            }
+        if (type == CryptoEntryType.BUY && holding > BigDecimal.ZERO) {
+            _uiState.value = _uiState.value.copy(error = "You already own this cryptocurrency.")
+            return
+        }
+        if (type == CryptoEntryType.SELL && (holding <= BigDecimal.ZERO || parsedQuantity > holding)) {
+            _uiState.value = _uiState.value.copy(error = "You do not own enough of this cryptocurrency.")
+            return
+        }
 
         val values = CryptoEntryValidator.convert(
             date = date,
@@ -120,6 +148,7 @@ class CryptoViewModel @Inject constructor(
             date = date,
             monthKey = values.monthKey,
             type = type,
+            quantity = quantity.trim(),
             originalCurrency = currency,
             originalValueMinor = values.originalValueMinor,
             exchangeRate = values.exchangeRate,
@@ -135,42 +164,66 @@ class CryptoViewModel @Inject constructor(
 
         val remembered = rateRecorder.capture(currency, "LKR", entry.exchangeRate, currencyOwner)
         _uiState.value = _uiState.value.copy(isSaving = true)
-        repository.addEntry(
-            entry = entry,
-            onSuccess = {
+        viewModelScope.launch {
+            try {
+                repository.addIntegratedEntry(entry, holding)
                 viewModelScope.launch { rateRecorder.afterSave(remembered) }
                 _uiState.value = _uiState.value.copy(
                     isSaving = false,
                     error = null,
                     message = "Crypto entry saved."
                 )
-            },
-            onError = { message ->
+            } catch (error: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isSaving = false,
-                    error = message,
+                    error = error.message ?: "Unable to save the crypto transaction.",
                     message = null
                 )
             }
-        )
+        }
     }
 
-    fun deleteEntry(entryId: String) {
-        repository.deleteEntry(
-            entryId = entryId,
-            onSuccess = {
+    fun deleteEntry(entry: CryptoEntry) {
+        if (_uiState.value.isSaving) return
+        _uiState.value = _uiState.value.copy(isSaving = true, error = null)
+        viewModelScope.launch {
+            try {
+                repository.deleteTransaction(entry, _uiState.value.entries)
                 _uiState.value = _uiState.value.copy(
+                    isSaving = false,
                     message = "Crypto entry deleted.",
                     error = null
                 )
-            },
-            onError = { message ->
+            } catch (error: Exception) {
                 _uiState.value = _uiState.value.copy(
-                    error = message,
+                    isSaving = false,
+                    error = error.message ?: "Unable to delete the entry.",
                     message = null
                 )
             }
-        )
+
+        }
+    }
+
+    fun deleteHolding(holding: CryptoHolding) {
+        if (_uiState.value.isSaving) return
+        _uiState.value = _uiState.value.copy(isSaving = true, error = null)
+        viewModelScope.launch {
+            try {
+                repository.deleteHolding(holding.assetName, _uiState.value.entries)
+                _uiState.value = _uiState.value.copy(
+                    isSaving = false,
+                    message = "Cryptocurrency holding deleted.",
+                    error = null
+                )
+            } catch (error: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    isSaving = false,
+                    error = error.message ?: "Unable to delete the cryptocurrency holding.",
+                    message = null
+                )
+            }
+        }
     }
 
     override fun onCleared() {

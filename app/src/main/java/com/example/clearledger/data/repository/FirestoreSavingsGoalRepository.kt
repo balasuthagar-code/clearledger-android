@@ -2,6 +2,8 @@
 package com.example.clearledger.data.repository
 
 import com.example.clearledger.domain.model.SavingsGoal
+import com.example.clearledger.domain.model.GoalSummary
+import com.example.clearledger.domain.repository.PrimaryGoalSource
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
@@ -10,13 +12,22 @@ import javax.inject.Singleton
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.tasks.await
+import java.time.LocalDate
+import java.time.temporal.ChronoUnit
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 
 @Singleton
+@OptIn(ExperimentalCoroutinesApi::class)
 class FirestoreSavingsGoalRepository @Inject constructor(
     private val auth: FirebaseAuth,
-    private val firestore: FirebaseFirestore
-) : SavingsGoalRepository {
+    private val firestore: FirebaseFirestore,
+    private val contributionRepository: SavingsContributionRepository
+) : SavingsGoalRepository, PrimaryGoalSource {
 
     private fun goalsCollection() =
         firestore.collection("users")
@@ -26,8 +37,7 @@ class FirestoreSavingsGoalRepository @Inject constructor(
             )
             .collection("savingsGoals")
 
-    override fun getSavingsGoals(): Flow<List<SavingsGoal>> =
-        callbackFlow {
+    private fun observeGoalDocuments(): Flow<List<SavingsGoal>> = callbackFlow {
             val uid = auth.currentUser?.uid
 
             if (uid == null) {
@@ -62,6 +72,24 @@ class FirestoreSavingsGoalRepository @Inject constructor(
 
             awaitClose {
                 registration.remove()
+            }
+        }
+
+    override fun getSavingsGoals(): Flow<List<SavingsGoal>> =
+        observeGoalDocuments().flatMapLatest { goals ->
+            if (goals.isEmpty()) {
+                flowOf(emptyList())
+            } else {
+                combine(
+                    goals.map { goal -> contributionRepository.getContributions(goal.id) }
+                ) { contributionLists ->
+                    goals.mapIndexed { index, goal ->
+                        goal.copy(
+                            contributions = contributionLists[index]
+                                .distinctBy { it.id }
+                        )
+                    }
+                }
             }
         }
 
@@ -111,6 +139,34 @@ class FirestoreSavingsGoalRepository @Inject constructor(
 
         document.set(goalData).await()
     }
+
+    override fun observePrimaryGoal(): Flow<GoalSummary?> =
+        getSavingsGoals()
+            .map { goals -> goals.firstOrNull { it.isPrimary } ?: goals.firstOrNull() }
+            .flatMapLatest { goal ->
+                if (goal == null) {
+                    kotlinx.coroutines.flow.flowOf(null)
+                } else {
+                    contributionRepository.getContributions(goal.id).map { contributions ->
+                        val saved = goal.startingSavedMinor + contributions
+                            .distinctBy { it.id }
+                            .sumOf { it.amountMinor }
+                        val months = runCatching {
+                            ChronoUnit.MONTHS.between(
+                                java.time.YearMonth.now(),
+                                java.time.YearMonth.from(LocalDate.parse(goal.deadline))
+                            ).coerceAtLeast(1L)
+                        }.getOrDefault(1L)
+                        GoalSummary(
+                            name = goal.name,
+                            savedMinor = saved,
+                            targetMinor = goal.targetAmountMinor,
+                            requiredMonthlyMinor = ((goal.targetAmountMinor - saved)
+                                .coerceAtLeast(0L) + months - 1L) / months
+                        )
+                    }
+                }
+            }
 
     suspend fun updateSavingsGoal(goal: SavingsGoal) {
         require(goal.id.isNotBlank()) {

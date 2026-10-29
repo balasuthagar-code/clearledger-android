@@ -43,4 +43,21 @@ class IncomeEntryReaderTest {
     fun amountMayBeAnyNumericType() {
         assertEquals(5_000L, IncomeEntryReader.receivedBaseAmount(entry("baseAmountMinor" to 5000)))
     }
+
+    @Test
+    fun legacyReceivedEntry_usesAmountMinorWhenStatusIsMissing() {
+        assertEquals(
+            25_000L,
+            IncomeEntryReader.receivedBaseAmount(mapOf("amountMinor" to 25_000L))
+        )
+    }
+
+    @Test
+    fun explicitExpectedLegacyEntry_isNotCounted() {
+        assertNull(
+            IncomeEntryReader.receivedBaseAmount(
+                mapOf("status" to "EXPECTED", "amountMinor" to 25_000L)
+            )
+        )
+    }
 }
