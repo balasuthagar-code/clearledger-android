@@ -51,6 +51,7 @@ class CryptoEntryRepository @Inject constructor(
                         monthKey = document.getString("monthKey") ?: "",
                         type = document.getString("type") ?: "Buy",
                         quantity = document.getString("quantity") ?: "0",
+                        pricePerUnit = document.getString("pricePerUnit") ?: "",
                         originalCurrency =
                             document.getString("originalCurrency") ?: "LKR",
                         originalValueMinor =
@@ -97,6 +98,7 @@ class CryptoEntryRepository @Inject constructor(
             "monthKey" to entry.monthKey,
             "type" to entry.type,
             "quantity" to entry.quantity,
+            "pricePerUnit" to entry.pricePerUnit,
             "originalCurrency" to entry.originalCurrency,
             "originalValueMinor" to entry.originalValueMinor,
             "exchangeRate" to entry.exchangeRate,
@@ -136,7 +138,6 @@ class CryptoEntryRepository @Inject constructor(
                     ?.toBigDecimalOrNull() ?: currentHoldingQuantity
                 val nextQuantity = when (entry.type) {
                     CryptoEntryType.BUY -> {
-                        if (storedQuantity > BigDecimal.ZERO) throw IllegalStateException("You already own this cryptocurrency.")
                         storedQuantity + quantity
                     }
                     CryptoEntryType.SELL -> {
@@ -151,7 +152,8 @@ class CryptoEntryRepository @Inject constructor(
                 transaction.set(cryptoRef, mapOf(
                     "id" to cryptoRef.id, "userId" to user.uid, "assetName" to entry.assetName.trim(),
                     "date" to entry.date, "monthKey" to entry.monthKey, "type" to entry.type,
-                    "quantity" to entry.quantity, "originalCurrency" to entry.originalCurrency,
+                    "quantity" to entry.quantity, "pricePerUnit" to entry.pricePerUnit,
+                    "originalCurrency" to entry.originalCurrency,
                     "originalValueMinor" to entry.originalValueMinor, "exchangeRate" to entry.exchangeRate,
                     "baseValueMinor" to entry.baseValueMinor, "costBasisBaseMinor" to entry.costBasisBaseMinor,
                     "note" to entry.note.trim(), "createdAt" to now, "updatedAt" to now
