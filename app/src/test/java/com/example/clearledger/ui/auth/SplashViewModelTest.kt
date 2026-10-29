@@ -69,6 +69,22 @@ class SplashViewModelTest {
         vm.checkSession(); testDispatcher.scheduler.advanceUntilIdle()
         assertEquals(SplashState.NavigateLogin, vm.splashState.value)
     }
+    @Test fun missingOfflineCacheShowsFriendlyRetryAndThenHome() = runTest {
+        authRepository.checkResultToReturn = Result.Error(OfflineProfileUnavailableException())
+        val vm = SplashViewModel(authRepository, categoriesForSplash())
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertEquals(
+            SplashState.Error("Your profile could not be verified offline. Connect and retry."),
+            vm.splashState.value
+        )
+
+        authRepository.checkResultToReturn = Result.Success(
+            AuthRepository.SetupStatus.Confirmed(User("123", "user@example.com"))
+        )
+        vm.checkSession()
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertEquals(SplashState.NavigateHome, vm.splashState.value)
+    }
     @Test fun categoryFailureDoesNotNavigateHome() = runTest {
         authRepository.checkResultToReturn = Result.Success(AuthRepository.SetupStatus.Confirmed(User("123")))
         val store = FakeProfileStore().apply { records["123"] = completeFields("123") }
