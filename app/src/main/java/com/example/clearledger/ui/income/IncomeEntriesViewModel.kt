@@ -14,6 +14,7 @@ import androidx.lifecycle.ViewModel
 import com.example.clearledger.core.common.IncomeEntryValidator
 import com.example.clearledger.data.repository.FirestoreIncomeEntryRepository
 import com.example.clearledger.domain.model.IncomeEntry
+import com.example.clearledger.domain.model.IncomeEntryOptions
 import com.example.clearledger.domain.model.IncomeSource
 import java.time.LocalDate
 import com.example.clearledger.core.common.CurrencyCore
@@ -239,6 +240,34 @@ class IncomeEntriesViewModel @Inject constructor(
                 onFailure = {
                     state = state.copy(
                         error = it.message ?: "Could not delete the entry.",
+                        message = null
+                    )
+                }
+            )
+        }
+    }
+
+    fun updateStatus(entryId: String, status: String) {
+        if (status !in IncomeEntryOptions.statuses) {
+            state = state.copy(
+                error = "Please select a valid income status.",
+                message = null
+            )
+            return
+        }
+
+        repository.updateStatus(entryId, status) { result ->
+            result.fold(
+                onSuccess = {
+                    state = state.copy(
+                        message = "Income status updated.",
+                        error = null
+                    )
+                    refresh()
+                },
+                onFailure = {
+                    state = state.copy(
+                        error = it.message ?: "Could not update income status.",
                         message = null
                     )
                 }

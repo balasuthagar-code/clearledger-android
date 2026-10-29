@@ -226,4 +226,31 @@ class FirestoreIncomeEntryRepository(
                 callback(Result.failure(error))
             }
     }
+
+    override fun updateStatus(
+        entryId: String,
+        status: String,
+        callback: (Result<Unit>) -> Unit
+    ) {
+        val collection = entries()
+
+        if (userId() == null || collection == null) {
+            callback(Result.failure(Exception("Please sign in first.")))
+            return
+        }
+
+        collection.document(entryId)
+            .update(
+                mapOf(
+                    "status" to status,
+                    "updatedAt" to System.currentTimeMillis()
+                )
+            )
+            .addOnSuccessListener {
+                callback(Result.success(Unit))
+            }
+            .addOnFailureListener { error ->
+                callback(Result.failure(error))
+            }
+    }
 }
