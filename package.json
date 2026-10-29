@@ -1,0 +1,31 @@
+﻿{
+    "name":  "clearledger-android",
+    "version":  "1.0.0",
+    "description":  "A modern personal finance management Android app built with Kotlin, Jetpack Compose, Firebase, and MVVM. Track income, expenses, savings goals, and financial progress in one simple and secure platform.",
+    "main":  "index.js",
+    "directories":  {
+                        "doc":  "docs"
+                    },
+    "scripts":  {
+                    "test":  "npm run test:firestore-rules",
+                    "test:firestore-rules":  "firebase emulators:exec --only firestore --project demo-clearledger \"node --test firebase-tests/firestore.rules.test.js\""
+                },
+    "repository":  {
+                       "type":  "git",
+                       "url":  "git+https://github.com/balasuthagar-code/clearledger-android.git"
+                   },
+    "keywords":  [
+
+                 ],
+    "author":  "",
+    "license":  "ISC",
+    "bugs":  {
+                 "url":  "https://github.com/balasuthagar-code/clearledger-android/issues"
+             },
+    "homepage":  "https://github.com/balasuthagar-code/clearledger-android#readme",
+    "devDependencies":  {
+                            "@firebase/rules-unit-testing":  "5.0.2",
+                            "firebase":  "12.19.0",
+                            "firebase-tools":  "15.34.2"
+                        }
+}

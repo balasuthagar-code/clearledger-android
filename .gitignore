@@ -16,3 +16,7 @@ local.properties
 
 # Firebase Android configuration
 /app/google-services.json
+
+node_modules/
+firebase-debug.log
+.firebase/
