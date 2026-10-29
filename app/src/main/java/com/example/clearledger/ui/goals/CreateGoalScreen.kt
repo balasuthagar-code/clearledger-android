@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -40,6 +41,8 @@ fun CreateGoalScreen(
     var currency by remember { mutableStateOf("LKR") }
     var deadline by remember { mutableStateOf("") }
     var startingAmount by remember { mutableStateOf("0") }
+    var goalToDelete by remember { mutableStateOf<SavingsGoal?>(null) }
+    var goalToEdit by remember { mutableStateOf<SavingsGoal?>(null) }
 
     Column(
         modifier = Modifier
@@ -111,19 +114,20 @@ fun CreateGoalScreen(
 
         Button(
             onClick = {
-                viewModel.createGoal(
-                    name = name,
-                    targetAmount = targetAmount,
-                    currency = currency,
-                    deadline = deadline,
-                    startingAmount = startingAmount
+                goalToEdit?.let { goal ->
+                    viewModel.updateGoal(
+                        goal, name, targetAmount, currency, deadline, startingAmount
+                    )
+                } ?: viewModel.createGoal(
+                    name, targetAmount, currency, deadline, startingAmount
                 )
             },
             enabled = !state.isSaving,
             modifier = Modifier.fillMaxWidth()
         ) {
             Text(
-                if (state.isSaving) "Saving..." else "Create Goal"
+                if (state.isSaving) "Saving..."
+                else if (goalToEdit == null) "Create Goal" else "Save Changes"
             )
         }
 
@@ -160,16 +164,57 @@ fun CreateGoalScreen(
                         items = state.goals,
                         key = { it.id }
                     ) { goal ->
-                        SavingsGoalItem(goal = goal)
+                        SavingsGoalItem(
+                            goal = goal,
+                            onEdit = {
+                                goalToEdit = goal
+                                name = goal.name
+                                targetAmount = formatMinorAmount(goal.targetAmountMinor)
+                                currency = goal.currency
+                                deadline = goal.deadline
+                                startingAmount = formatMinorAmount(goal.startingSavedMinor)
+                                viewModel.clearMessages()
+                            },
+                            onDelete = { goalToDelete = goal }
+                        )
                     }
                 }
             }
         }
     }
+
+    goalToDelete?.let { goal ->
+        AlertDialog(
+            onDismissRequest = { goalToDelete = null },
+            title = { Text("Delete savings goal?") },
+            text = {
+                Text("This deletes ${goal.name}. Its contribution history will also be removed.")
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.deleteGoal(goal)
+                        goalToDelete = null
+                    }
+                ) {
+                    Text("Delete")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { goalToDelete = null }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
 }
 
 @Composable
-private fun SavingsGoalItem(goal: SavingsGoal) {
+private fun SavingsGoalItem(
+    goal: SavingsGoal,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit
+) {
     val progress = goal.progressPercentage / 100f
 
     Column(
@@ -212,6 +257,9 @@ private fun SavingsGoalItem(goal: SavingsGoal) {
         Text(
             text = "${goal.progressPercentage.toInt()}% completed"
         )
+
+        TextButton(onClick = onEdit) { Text("Edit goal") }
+        TextButton(onClick = onDelete) { Text("Delete goal") }
     }
 }
 

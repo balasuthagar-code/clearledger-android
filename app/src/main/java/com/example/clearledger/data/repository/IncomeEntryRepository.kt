@@ -19,6 +19,12 @@ interface IncomeEntryRepository {
         callback: (Result<Unit>) -> Unit
     )
 
+    fun updateStatus(
+        entryId: String,
+        status: String,
+        callback: (Result<Unit>) -> Unit
+    )
+
     fun deleteEntry(
         entryId: String,
         callback: (Result<Unit>) -> Unit

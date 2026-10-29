@@ -39,6 +39,18 @@ class IncomeEntriesViewModelTest {
             callback(Result.success(Unit))
         }
 
+        override fun updateStatus(
+            entryId: String,
+            status: String,
+            callback: (Result<Unit>) -> Unit
+        ) {
+            val index = saved.indexOfFirst { it.id == entryId }
+            if (index >= 0) {
+                saved[index] = saved[index].copy(status = status)
+            }
+            callback(Result.success(Unit))
+        }
+
         override fun deleteEntry(
             entryId: String,
             callback: (Result<Unit>) -> Unit
@@ -152,5 +164,18 @@ class IncomeEntriesViewModelTest {
         assertEquals("existing-entry", entry.id)
         assertEquals(1234L, entry.createdAt)
         assertEquals(3_005_000L, entry.baseAmountMinor)
+    }
+
+    @Test
+    fun statusCanBeUpdatedWithoutSavingTheWholeEntry() {
+        val repository = FakeRepository()
+        val viewModel = IncomeEntriesViewModel(repository, testRateRecorder())
+        val entry = IncomeEntry(id = "entry-1", status = "EXPECTED")
+        repository.saved += entry
+
+        viewModel.updateStatus(entry.id, "RECEIVED")
+
+        assertEquals("RECEIVED", repository.saved.single().status)
+        assertEquals("Income status updated.", viewModel.state.message)
     }
 }

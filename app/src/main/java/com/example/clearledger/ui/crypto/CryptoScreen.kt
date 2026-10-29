@@ -50,30 +50,31 @@ fun CryptoScreen(
     var holdingToDelete by remember { mutableStateOf<CryptoHolding?>(null) }
     var detailsHolding by remember { mutableStateOf<CryptoHolding?>(null) }
     var sellHolding by remember { mutableStateOf<CryptoHolding?>(null) }
+    var buyMoreAsset by remember { mutableStateOf<String?>(null) }
     val holdings = state.entries
         .groupBy { it.assetName.trim().lowercase() }
         .values
         .mapNotNull { entries ->
-            val quantity = entries.fold(BigDecimal.ZERO) { total, entry ->
-                val value = entry.quantity.toBigDecimalOrNull() ?: BigDecimal.ZERO
-                if (entry.type == CryptoEntryType.BUY) total + value else total - value
-            }
+            val quantity = CryptoPortfolioMath.quantity(entries)
             if (quantity <= BigDecimal.ZERO) {
                 null
             } else {
                 CryptoHolding(
                     assetName = entries.first().assetName,
                     quantity = quantity,
-                    purchaseCostMinor = entries
-                        .filter { it.type == CryptoEntryType.BUY }
-                        .sumOf { it.baseValueMinor },
+                    purchaseCostMinor = CryptoPortfolioMath.purchaseCostMinor(entries),
                     entries = entries.sortedByDescending { it.date }
                 )
             }
         }
+    val realisedProfitLossMinor = state.entries
+        .mapNotNull { it.realisedProfitLossMinor }
+        .sum()
+    val investedMinor = holdings.sumOf { it.purchaseCostMinor }
     LaunchedEffect(state.message) {
         if (state.message == "Crypto entry saved.") {
             showAddDialog = false
+            buyMoreAsset = null
             sellHolding = null
         }
     }
@@ -101,10 +102,29 @@ fun CryptoScreen(
             style = MaterialTheme.typography.bodyMedium
         )
 
+        if (state.entries.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Text("Portfolio summary", style = MaterialTheme.typography.titleMedium)
+                    Text("Invested: LKR ${formatMinor(investedMinor)}")
+                    Text(
+                        "Realised profit/loss: LKR ${
+                            formatSignedMinor(realisedProfitLossMinor)
+                        }"
+                    )
+                    Text("Open holdings: ${holdings.size}")
+                }
+            }
+        }
+
         Spacer(modifier = Modifier.height(12.dp))
 
         Button(
-            onClick = { showAddDialog = true },
+            onClick = {
+                buyMoreAsset = null
+                showAddDialog = true
+            },
             modifier = Modifier.fillMaxWidth()
         ) {
             Text("Buy Cryptocurrency")
@@ -147,6 +167,10 @@ fun CryptoScreen(
                             CryptoHoldingCard(
                                 holding = holding,
                                 onDetails = { detailsHolding = holding },
+                                onBuyMore = {
+                                    buyMoreAsset = holding.assetName
+                                    showAddDialog = true
+                                },
                                 onSell = { sellHolding = holding },
                                 onDelete = { holdingToDelete = holding }
                             )
@@ -171,16 +195,18 @@ fun CryptoScreen(
 
     if (showAddDialog) {
         AddCryptoEntryDialog(
+            initialAsset = buyMoreAsset.orEmpty(),
             saveError = state.error,
             isSaving = state.isSaving,
             onDismiss = { showAddDialog = false },
-            onSave = { asset, date, type, amount, quantity, currency, rate, costBasis, note ->
+            onSave = { asset, date, type, amount, quantity, pricePerUnit, currency, rate, costBasis, note ->
                 viewModel.addEntry(
                     assetName = asset,
                     date = date,
                     type = type,
                     originalValue = amount,
                     quantity = quantity,
+                    pricePerUnit = pricePerUnit,
                     currency = currency,
                     rate = rate,
                     costBasisLkr = costBasis,
@@ -248,8 +274,11 @@ fun CryptoScreen(
             saveError = state.error,
             isSaving = state.isSaving,
             onDismiss = { sellHolding = null },
-            onSave = { asset, date, type, amount, quantity, currency, rate, costBasis, note ->
-                viewModel.addEntry(asset, date, type, amount, quantity, currency, rate, costBasis, note)
+            onSave = { asset, date, type, amount, quantity, pricePerUnit, currency, rate, costBasis, note ->
+                viewModel.addEntry(
+                    asset, date, type, amount, quantity, pricePerUnit,
+                    currency, rate, costBasis, note
+                )
             }
         )
     }
@@ -259,6 +288,7 @@ fun CryptoScreen(
 private fun CryptoHoldingCard(
     holding: CryptoHolding,
     onDetails: () -> Unit,
+    onBuyMore: () -> Unit,
     onSell: () -> Unit,
     onDelete: () -> Unit
 ) {
@@ -267,11 +297,17 @@ private fun CryptoHoldingCard(
             Text(holding.assetName, style = MaterialTheme.typography.titleMedium)
             Text("Quantity owned: ${holding.quantity.stripTrailingZeros().toPlainString()}")
             Text("Purchase cost: LKR ${formatMinor(holding.purchaseCostMinor)}")
+            Text(
+                "Average purchase price: LKR ${
+                    formatDecimal(holding.averagePurchasePriceMinor)
+                } per unit"
+            )
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End
             ) {
                 TextButton(onClick = onDetails) { Text("View Details") }
+                TextButton(onClick = onBuyMore) { Text("Buy More") }
                 TextButton(onClick = onSell) { Text("Sell") }
                 TextButton(onClick = onDelete) { Text("Delete") }
             }
@@ -353,6 +389,7 @@ private fun AddCryptoEntryDialog(
         type: String,
         amount: String,
         quantity: String,
+        pricePerUnit: String,
         currency: String,
         rate: String,
         costBasis: String,
@@ -364,6 +401,7 @@ private fun AddCryptoEntryDialog(
     var type by remember(initialType) { mutableStateOf(initialType) }
     var amount by remember { mutableStateOf("") }
     var quantity by remember(initialAsset) { mutableStateOf("") }
+    var pricePerUnit by remember(initialAsset) { mutableStateOf("") }
     var currency by remember { mutableStateOf("LKR") }
     var rate by remember { mutableStateOf("1") }
     var costBasis by remember { mutableStateOf("") }
@@ -374,7 +412,15 @@ private fun AddCryptoEntryDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Add Crypto Entry") },
+        title = {
+            Text(
+                if (initialType == CryptoEntryType.BUY && initialAsset.isNotBlank()) {
+                    "Buy More ${initialAsset}"
+                } else {
+                    "Add Crypto Entry"
+                }
+            )
+        },
         text = {
             LazyColumn(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -389,11 +435,29 @@ private fun AddCryptoEntryDialog(
                 item {
                     OutlinedTextField(
                         value = quantity,
-                        onValueChange = { quantity = it },
+                        onValueChange = {
+                            quantity = it
+                            amount = calculateTotal(it, pricePerUnit)
+                        },
                         label = { Text("Quantity") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
+                }
+
+                if (type == CryptoEntryType.BUY) {
+                    item {
+                        OutlinedTextField(
+                            value = pricePerUnit,
+                            onValueChange = {
+                                pricePerUnit = it
+                                amount = calculateTotal(quantity, it)
+                            },
+                            label = { Text("Price per unit ($currency)") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
                 }
 
                 item {
@@ -537,12 +601,14 @@ private fun AddCryptoEntryDialog(
                             type,
                             amount,
                             quantity,
+                            pricePerUnit,
                             currency,
                             rate,
                             costBasis,
                             note
                         )
                     }
+
                 }
             ) {
                 Text("Save")
@@ -556,9 +622,28 @@ private fun AddCryptoEntryDialog(
     )
 }
 
+private fun calculateTotal(quantity: String, pricePerUnit: String): String {
+    val quantityValue = quantity.toBigDecimalOrNull() ?: return ""
+    val priceValue = pricePerUnit.toBigDecimalOrNull() ?: return ""
+    return quantityValue
+        .multiply(priceValue)
+        .setScale(2, java.math.RoundingMode.HALF_UP)
+        .stripTrailingZeros()
+        .toPlainString()
+}
+
 private fun formatMinor(value: Long): String {
     return BigDecimal.valueOf(value, 2)
         .setScale(2, java.math.RoundingMode.HALF_UP)
         .toPlainString()
+}
+
+private fun formatSignedMinor(value: Long): String {
+    val sign = if (value > 0L) "+" else ""
+    return "$sign${formatMinor(value)}"
+}
+
+private fun formatDecimal(value: BigDecimal): String {
+    return value.stripTrailingZeros().toPlainString()
 }
 //thisanth

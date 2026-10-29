@@ -138,5 +138,78 @@ class SavingsGoalsViewModel @Inject constructor(
             it.copy(error = null, message = null)
         }
     }
+
+    fun deleteGoal(goal: SavingsGoal) {
+        if (_uiState.value.isSaving) return
+
+        viewModelScope.launch {
+            _uiState.update { it.copy(isSaving = true, error = null, message = null) }
+            try {
+                repository.deleteSavingsGoal(goal.id)
+                _uiState.update {
+                    it.copy(
+                        isSaving = false,
+                        message = "Savings goal deleted."
+                    )
+                }
+            } catch (error: Exception) {
+                _uiState.update {
+                    it.copy(
+                        isSaving = false,
+                        error = error.message ?: "Could not delete the goal."
+                    )
+                }
+            }
+        }
+    }
+
+    fun updateGoal(
+        goal: SavingsGoal,
+        name: String,
+        targetAmount: String,
+        currency: String,
+        deadline: String,
+        startingAmount: String
+    ) {
+        val validationError = SavingsGoalValidator.validate(
+            name, targetAmount, currency, deadline, startingAmount
+        )
+        if (validationError != null) {
+            _uiState.update { it.copy(error = validationError, message = null) }
+            return
+        }
+
+        val targetMinor = (CurrencyCore.parseAmount(targetAmount, currency) as? Result.Success)?.data
+        val startingMinor = (CurrencyCore.parseAmount(startingAmount, currency) as? Result.Success)?.data
+        if (targetMinor == null || startingMinor == null) {
+            _uiState.update { it.copy(error = "Invalid goal amount.", message = null) }
+            return
+        }
+
+        viewModelScope.launch {
+            _uiState.update { it.copy(isSaving = true, error = null, message = null) }
+            try {
+                repository.updateSavingsGoal(
+                    goal.copy(
+                        name = name.trim(),
+                        targetAmountMinor = targetMinor,
+                        currency = currency,
+                        deadline = deadline.trim(),
+                        startingSavedMinor = startingMinor
+                    )
+                )
+                _uiState.update {
+                    it.copy(isSaving = false, message = "Savings goal updated.")
+                }
+            } catch (error: Exception) {
+                _uiState.update {
+                    it.copy(
+                        isSaving = false,
+                        error = error.message ?: "Could not update the goal."
+                    )
+                }
+            }
+        }
+    }
 }
 //thisanth

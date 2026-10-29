@@ -168,7 +168,7 @@ class FirestoreSavingsGoalRepository @Inject constructor(
                 }
             }
 
-    suspend fun updateSavingsGoal(goal: SavingsGoal) {
+    override suspend fun updateSavingsGoal(goal: SavingsGoal) {
         require(goal.id.isNotBlank()) {
             "Goal ID is required."
         }
@@ -201,7 +201,7 @@ class FirestoreSavingsGoalRepository @Inject constructor(
             .await()
     }
 
-    suspend fun deleteSavingsGoal(goalId: String) {
+    override suspend fun deleteSavingsGoal(goalId: String) {
         require(goalId.isNotBlank()) {
             "Goal ID is required."
         }

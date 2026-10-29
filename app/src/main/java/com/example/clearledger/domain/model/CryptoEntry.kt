@@ -8,6 +8,7 @@ data class CryptoEntry(
     val monthKey: String = "",
     val type: String = CryptoEntryType.BUY,
     val quantity: String = "0",
+    val pricePerUnit: String = "",
     val originalCurrency: String = "LKR",
     val originalValueMinor: Long = 0L,
     val exchangeRate: String = "1",

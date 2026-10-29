@@ -32,7 +32,10 @@ data class CryptoHolding(
     val quantity: BigDecimal,
     val purchaseCostMinor: Long,
     val entries: List<CryptoEntry>
-)
+) {
+    val averagePurchasePriceMinor: BigDecimal
+        get() = CryptoPortfolioMath.averagePurchasePriceMinor(purchaseCostMinor, quantity)
+}
 
 @HiltViewModel
 class CryptoViewModel @Inject constructor(
@@ -80,6 +83,7 @@ class CryptoViewModel @Inject constructor(
         type: String,
         originalValue: String,
         quantity: String,
+        pricePerUnit: String,
         currency: String,
         rate: String,
         costBasisLkr: String,
@@ -112,16 +116,18 @@ class CryptoViewModel @Inject constructor(
             _uiState.value = _uiState.value.copy(error = "Enter a quantity greater than zero.")
             return
         }
+        if (type == CryptoEntryType.BUY &&
+            (pricePerUnit.toBigDecimalOrNull() ?: BigDecimal.ZERO) <= BigDecimal.ZERO
+        ) {
+            _uiState.value = _uiState.value.copy(error = "Enter a price per unit greater than zero.")
+            return
+        }
         val holding = _uiState.value.entries
             .filter { it.assetName.equals(assetName.trim(), ignoreCase = true) }
             .fold(BigDecimal.ZERO) { total, item ->
                 val itemQuantity = item.quantity.toBigDecimalOrNull() ?: BigDecimal.ZERO
                 if (item.type == CryptoEntryType.BUY) total + itemQuantity else total - itemQuantity
             }
-        if (type == CryptoEntryType.BUY && holding > BigDecimal.ZERO) {
-            _uiState.value = _uiState.value.copy(error = "You already own this cryptocurrency.")
-            return
-        }
         if (type == CryptoEntryType.SELL && (holding <= BigDecimal.ZERO || parsedQuantity > holding)) {
             _uiState.value = _uiState.value.copy(error = "You do not own enough of this cryptocurrency.")
             return
@@ -149,6 +155,7 @@ class CryptoViewModel @Inject constructor(
             monthKey = values.monthKey,
             type = type,
             quantity = quantity.trim(),
+            pricePerUnit = pricePerUnit.trim(),
             originalCurrency = currency,
             originalValueMinor = values.originalValueMinor,
             exchangeRate = values.exchangeRate,

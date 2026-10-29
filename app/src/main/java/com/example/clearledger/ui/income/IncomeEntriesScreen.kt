@@ -136,6 +136,9 @@ fun IncomeEntriesScreen(
                             },
                             onDelete = {
                                 pendingDelete = entry
+                            },
+                            onStatusChange = { status ->
+                                viewModel.updateStatus(entry.id, status)
                             }
                         )
                     }
@@ -204,7 +207,8 @@ private fun IncomeEntryCard(
     entry: IncomeEntry,
     sourceName: String,
     onEdit: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onStatusChange: (String) -> Unit
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -227,7 +231,12 @@ private fun IncomeEntryCard(
                 Text("LKR ${formatMinor(entry.baseAmountMinor)}")
             }
 
-            Text("Status: ${entry.status.lowercase().replaceFirstChar { it.uppercase() }}")
+            SimpleDropdown(
+                label = "Status",
+                selected = entry.status,
+                options = IncomeEntryOptions.statuses,
+                onSelect = onStatusChange
+            )
 
             if (entry.note.isNotBlank()) {
                 Text("Note: ${entry.note}")

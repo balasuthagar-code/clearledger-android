@@ -331,6 +331,9 @@ private fun FreelanceProjectCard(
     }
     val today = LocalDate.now().toString()
     val overdueCount = project.milestones.count { it.isOverdue(today) }
+    val paymentFollowUpDue = project.paymentStatus != "PAID" &&
+        project.endDate.isNotBlank() &&
+        project.endDate < today
 
     Card(
         modifier = Modifier.fillMaxWidth()
@@ -391,6 +394,12 @@ private fun FreelanceProjectCard(
 
             Text("Progress: ${(project.progress * 100).toInt()}%")
             Text("Payment: ${project.paymentStatus}")
+            if (paymentFollowUpDue) {
+                Text(
+                    "Payment follow-up needed: project end date has passed.",
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
             Text("Received: LKR ${formatMinorAmount(project.totalPaidBaseMinor)}")
             Text("Outstanding: LKR ${formatMinorAmount(project.outstandingBalanceMinor)}")
             if (project.endDate.isNotBlank() && project.endDate <= today &&
