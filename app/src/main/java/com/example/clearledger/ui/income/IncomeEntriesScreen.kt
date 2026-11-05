@@ -43,6 +43,7 @@ import java.text.NumberFormat
 import java.time.LocalDate
 import java.util.Locale
 import com.example.clearledger.currency.CurrencyRateField
+import com.example.clearledger.currency.CurrencyConversionPreview
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -353,6 +354,12 @@ private fun IncomeEntryEditorDialog(
                         onChange = { rate = it },
                         editing = entry != null,
                         enabled = !isSaving
+                    )
+                    CurrencyConversionPreview(
+                        amountText = amount,
+                        originalCurrency = currency,
+                        baseCurrency = "LKR",
+                        exchangeRateText = rate
                     )
                 }
                 OutlinedTextField(

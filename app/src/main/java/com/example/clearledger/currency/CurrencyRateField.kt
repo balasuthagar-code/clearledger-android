@@ -4,11 +4,19 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.padding
 import com.example.clearledger.core.common.Result
 import com.example.clearledger.domain.model.RateMemoryContext
 import com.example.clearledger.domain.model.RateMemoryLookup
@@ -18,84 +26,126 @@ import kotlinx.coroutines.launch
 @Composable
 fun currencyCompletionDependencies(): CurrencyCompletionEntryPoint {
     val context = LocalContext.current.applicationContext
-    return remember(context) { EntryPointAccessors.fromApplication(context, CurrencyCompletionEntryPoint::class.java) }
+    return remember(context) {
+        EntryPointAccessors.fromApplication(context, CurrencyCompletionEntryPoint::class.java)
+    }
 }
 
-/** Editable suggestion field, shared by the five connected forms. Caller clears rate on pair change. */
+/**
+ * Loads a current rate automatically for a new foreign-currency entry. The rate remains editable,
+ * and the caller can immediately show the converted amount as the user types. Existing entries
+ * retain their saved rate so editing history never silently changes its recorded conversion.
+ */
 @Composable
-fun CurrencyRateField(original: String, base: String = "LKR", value: String,
-    onChange: (String) -> Unit, editing: Boolean = false, enabled: Boolean = true,
-    error: String? = null) {
+fun CurrencyRateField(
+    original: String,
+    base: String = "LKR",
+    value: String,
+    onChange: (String) -> Unit,
+    editing: Boolean = false,
+    enabled: Boolean = true,
+    error: String? = null
+) {
     if (original == base) return
+
     val deps = currencyCompletionDependencies()
     var uid by remember { mutableStateOf(deps.account().currentUid()) }
     DisposableEffect(deps) {
         val subscription = deps.authEvents().observeUid { uid = it }
         onDispose { subscription.cancel() }
     }
+
     val owner = uid ?: return
     val session = remember(owner, original, base, editing) {
         RateSuggestionSession(RateMemoryContext(owner, original, base), editing)
     }
-    val currentValue by rememberUpdatedState(value)
-    val change by rememberUpdatedState(onChange)
+    val currentValue = rememberUpdatedState(value)
+    val change = rememberUpdatedState(onChange)
     var message by remember(session) { mutableStateOf<String?>(null) }
-    var quote by remember(session) { mutableStateOf<HostedQuote?>(null) }
-    var quoteTicket by remember(session) { mutableStateOf(0L) }
     var fetching by remember(session) { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
-    val uri = LocalUriHandler.current
-    DisposableEffect(session) { onDispose { session.close() } }
-    LaunchedEffect(session) {
-        if (!editing && value.isBlank()) {
-            val ticket = session.ticket()
-            when (val result = deps.memory().lookup(session.context)) {
-                is Result.Success -> if (session.accepts(ticket, deps.account().currentUid()) && currentValue.isBlank()) {
-                    val saved = result.data as? RateMemoryLookup.Remembered
-                    if (saved != null) { change(saved.rate.ratePlain); message = "Last confirmed rate — check before saving" }
-                }
-                is Result.Error -> if (session.accepts(ticket, deps.account().currentUid())) {
-                    message = "Remembered rate unavailable. Enter a rate or request a suggestion."
-                }
-            }
-        }
+
+    DisposableEffect(session) {
+        onDispose { session.close() }
     }
-    Column {
-        OutlinedTextField(value = value, onValueChange = {
-            session.typed(); quote = null; message = null; onChange(it)
-        }, label = { Text("Exchange rate ($base per 1 $original)") },
-            enabled = enabled, singleLine = true, isError = error != null,
-            supportingText = { (error ?: message)?.let { Text(it) } }, modifier = Modifier.fillMaxWidth())
-        if (!editing) {
-            TextButton(enabled = enabled && !fetching, onClick = {
-                val ticket = session.ticket()
-                fetching = true; quote = null
-                scope.launch {
-                    try {
-                        when (val result = deps.hosted().quote(original, base)) {
-                            is Result.Success -> if (session.acceptsExplicit(ticket, deps.account().currentUid())) {
-                                quote = result.data; quoteTicket = ticket
-                                message = "Suggestion only — confirm the rate you actually used"
-                            }
-                            is Result.Error -> if (session.acceptsExplicit(ticket, deps.account().currentUid())) {
-                                message = "Rate unavailable or stale. You can enter it manually."
+
+    suspend fun loadRate(ticket: Long, explicitRetry: Boolean = false) {
+        fun sessionAccepts() = if (explicitRetry) {
+            session.acceptsExplicit(ticket, deps.account().currentUid())
+        } else {
+            session.accepts(ticket, deps.account().currentUid())
+        }
+
+        fetching = true
+        try {
+            when (val result = deps.hosted().quote(original, base)) {
+                is Result.Success -> {
+                    if (sessionAccepts() && currentValue.value.isBlank()) {
+                        change.value(result.data.ratePlain)
+                        message = "Latest available rate from ${result.data.source}. Check or edit it before saving."
+                    }
+                }
+                is Result.Error -> {
+                    if (!sessionAccepts()) return
+                    when (val remembered = deps.memory().lookup(session.context)) {
+                        is Result.Success -> {
+                            if (sessionAccepts() && currentValue.value.isBlank()) {
+                                val saved = remembered.data as? RateMemoryLookup.Remembered
+                                if (saved != null) {
+                                    change.value(saved.rate.ratePlain)
+                                    message = "Using your last saved rate. Check or edit it before saving."
+                                } else {
+                                    message = "Automatic rate unavailable. Enter the rate manually."
+                                }
                             }
                         }
-                    } finally { fetching = false }
+                        is Result.Error -> if (currentValue.value.isBlank()) {
+                            message = "Automatic rate unavailable. Enter the rate manually."
+                        }
+                    }
                 }
-            }) { Text(if (fetching) "Getting suggestion…" else "Get rate suggestion") }
-            quote?.let { suggestion ->
-                Text("${suggestion.ratePlain} · quoted ${java.time.Instant.ofEpochMilli(suggestion.quotedAtMillis)}")
-                TextButton(enabled = enabled, onClick = {
-                    val now = System.currentTimeMillis()
-                    if (session.acceptsExplicit(quoteTicket, deps.account().currentUid()) &&
-                        now >= suggestion.quotedAtMillis && now - suggestion.quotedAtMillis <= 172_800_000L &&
-                        now < suggestion.nextUpdateMillis) {
-                        session.typed(); change(suggestion.ratePlain); quote = null
-                    } else { quote = null; message = "Suggestion expired. Request another or enter a rate." }
-                }) { Text("Use suggestion") }
             }
-            TextButton(onClick = { uri.openUri("https://www.exchangerate-api.com") }) { Text("Rates By Exchange Rate API") }
+        } finally {
+            fetching = false
+        }
+    }
+
+    LaunchedEffect(session) {
+        if (!editing && currentValue.value.isBlank()) {
+            loadRate(session.ticket())
+        }
+    }
+
+    Column {
+        OutlinedTextField(
+            value = value,
+            onValueChange = {
+                session.typed()
+                message = null
+                onChange(it)
+            },
+            label = { Text("Exchange rate ($base per 1 $original)") },
+            enabled = enabled,
+            singleLine = true,
+            isError = error != null,
+            supportingText = {
+                (error ?: message)?.let { Text(it) }
+            },
+            modifier = Modifier.fillMaxWidth()
+        )
+        if (fetching) {
+            Text(
+                text = "Getting the latest exchange rate…",
+                modifier = Modifier.padding(start = 12.dp)
+            )
+        }
+        if (!editing && !fetching && value.isBlank()) {
+            androidx.compose.material3.TextButton(
+                onClick = { scope.launch { loadRate(session.ticket(), explicitRetry = true) } },
+                enabled = enabled
+            ) {
+                Text("Retry automatic rate")
+            }
         }
     }
 }
