@@ -151,5 +151,5 @@ Tests cover the business rules (money and currency, monthly summary, safe-to-spe
 | Member | Name | IT number | Area |
 |---|---|---|---|
 | Member 1 | T.Sanojan | IT23619180 | Platform, authentication, profile, security rules, QA |
-| Member 2 | Thisanth | <<IT number>> | Income, currency, freelance, crypto, goals, weekly check-in |
+| Member 2 | M.Thisanth | IT23613768| Income, currency, freelance, crypto, goals, weekly check-in |
 | Member 3 | B.Suthagar | IT23184930 | Expenses, categories, recurring, dashboard |
