@@ -11,25 +11,7 @@ import java.time.LocalDate
 import java.time.ZoneId
 import java.util.Date
 
-/**
- * Converts between a Firestore document (a plain Map) and the domain [Expense].
- *
- * Why a Map and not a DTO class like CategoryDto? Two reasons:
- *  1. It avoids the Firestore "isXxx" Java-bean naming trap completely.
- *  2. It is pure Kotlin, so it is unit tested without Android or Firebase.
- *
- * The reader is deliberately forgiving (dates may be a Date, an ISO string or epoch millis; numbers
- * may be Int/Long/Double) so documents written by an earlier version of your quick-add screen
- * still load. The writer always produces the SRS schema:
- *
- *   users/{uid}/expenses/{id}:
- *     amountMinor, currency, exchangeRate (String), baseAmountMinor, categoryId,
- *     classification ("COMMITTED"/"DISCRETIONARY"), paymentMethod, merchant, note,
- *     date (Timestamp), monthKey ("YYYY-MM"), createdAt, updatedAt,
- *     recurringId (only when created by confirming a recurring item)
- *
- * The repository converts Firestore Timestamp -> java.util.Date before calling [fromMap].
- */
+
 object ExpenseMapper {
 
     private val MONTH_KEY = Regex("^\\d{4}-\\d{2}$")

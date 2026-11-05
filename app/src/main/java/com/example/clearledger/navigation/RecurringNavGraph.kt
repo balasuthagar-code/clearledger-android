@@ -8,7 +8,7 @@ import androidx.navigation.navArgument
 import com.example.clearledger.ui.recurring.form.RecurringFormRoute
 import com.example.clearledger.ui.recurring.list.RecurringListRoute
 
-/** Call ONCE inside NavHost { ... }:   recurringGraph(navController) */
+
 fun NavGraphBuilder.recurringGraph(navController: NavController) {
     composable(RecurringRoutes.LIST) {
         RecurringListRoute(

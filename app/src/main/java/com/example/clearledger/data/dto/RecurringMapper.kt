@@ -6,20 +6,6 @@ import com.example.clearledger.domain.model.RecurringFrequency
 import com.example.clearledger.domain.model.RecurringItem
 import java.util.Date
 
-/**
- * Firestore document <-> RecurringItem, using a plain Map (no Java-bean "isActive" trap, and pure
- * Kotlin so it is unit tested without Android).
- *
- *   users/{uid}/recurring/{id}:
- *     name, amountMinor, currency, exchangeRate (String), baseAmountMinor, categoryId,
- *     frequency ("WEEKLY"/"MONTHLY"/"YEARLY"), dueDay, dueMonth, isActive, createdAt, updatedAt,
- *     skippedMonthKey (only while a month is skipped)
- *
- * Confirmation state is NOT stored here: an item is Confirmed when a linked expense exists
- * (expenses.recurringId), which can never disagree with the real expense list. Only "skipped" needs
- * storing. toMap() deliberately never writes skippedMonthKey, so editing an item in the form cannot
- * reset a skip; the repository changes it through setSkippedMonth().
- */
 object RecurringMapper {
 
     fun fromMap(id: String, data: Map<String, Any?>): RecurringItem? {
