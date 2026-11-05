@@ -14,11 +14,7 @@ import java.time.LocalDate
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/**
- * In-memory expenses. NO LONGER BOUND in ExpenseModule (Sprint 2 binds FirestoreExpenseRepository).
- * Kept only as a handy fake for @Preview or a quick offline experiment: to use it again, change one
- * line in ExpenseModule. Never ship it as the real implementation.
- */
+
 @Singleton
 class FakeExpenseRepository @Inject constructor() : ExpenseRepository {
 

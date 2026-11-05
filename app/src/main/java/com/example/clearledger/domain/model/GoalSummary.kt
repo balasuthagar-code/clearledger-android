@@ -1,12 +1,6 @@
 package com.example.clearledger.domain.model
 
-/**
- * The ONLY thing the dashboard needs to know about the primary savings goal (FR-DASH-05).
- * The goals module (Member 2) fills it from its own goal documents; the dashboard never reads
- * or writes goal documents itself.
- *
- * Amounts are minor units in the base currency (BR-3: saved = starting amount + contributions).
- */
+
 data class GoalSummary(
     val name: String,
     val savedMinor: Long,

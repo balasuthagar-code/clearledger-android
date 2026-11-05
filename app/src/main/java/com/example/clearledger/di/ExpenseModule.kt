@@ -26,7 +26,7 @@ abstract class ExpenseModule {
     @Singleton
     abstract fun bindCategoryRepository(impl: FirestoreCategoryRepository): CategoryRepository
 
-    // Sprint 2: expenses are now real (Firestore). The Fake is no longer bound.
+
     @Binds
     @Singleton
     abstract fun bindExpenseRepository(impl: FirestoreExpenseRepository): ExpenseRepository

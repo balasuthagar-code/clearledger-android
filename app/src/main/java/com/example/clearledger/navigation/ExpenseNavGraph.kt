@@ -8,10 +8,7 @@ import androidx.navigation.navArgument
 import com.example.clearledger.ui.expense.form.ExpenseFormRoute
 import com.example.clearledger.ui.expense.list.ExpenseListRoute
 
-/**
- * Call this ONCE inside the NavHost { ... } block of AppNavigation:
- *     expenseGraph(navController)
- */
+
 fun NavGraphBuilder.expenseGraph(navController: NavController) {
     composable(ExpenseRoutes.LIST) {
         ExpenseListRoute(

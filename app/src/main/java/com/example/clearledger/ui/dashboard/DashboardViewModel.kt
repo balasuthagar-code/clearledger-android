@@ -104,7 +104,7 @@ class DashboardViewModel @Inject constructor(
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     init {
-        // Makes sure the default categories exist. Idempotent; Member 1's onboarding can take this over.
+
         viewModelScope.launch { categoryRepository.seedDefaultCategoriesIfEmpty() }
     }
 
