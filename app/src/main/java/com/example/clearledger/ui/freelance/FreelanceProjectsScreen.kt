@@ -4,7 +4,6 @@ import com.example.clearledger.currency.CurrencyRateField
 import com.example.clearledger.currency.currencyCompletionDependencies
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
-
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -29,15 +28,14 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.clearledger.core.common.FreelanceProjectValidator
-import com.example.clearledger.data.repository.FreelanceProjectRepository
 import com.example.clearledger.domain.model.FreelanceProject
 import com.example.clearledger.domain.model.FreelanceProjectStatus
 import java.math.BigDecimal
@@ -45,42 +43,17 @@ import java.time.LocalDate
 
 
 @Composable
-fun FreelanceProjectsScreen() {
+fun FreelanceProjectsScreen(
+    viewModel: FreelanceProjectsViewModel = hiltViewModel()
+) {
     val currencyDeps = currencyCompletionDependencies()
     val currencyOwner = remember { currencyDeps.account().currentUid() }
     val scope = rememberCoroutineScope()
-    var saving by remember { mutableStateOf(false) }
-    val repository = remember {
-        FreelanceProjectRepository()
-    }
-
-    var projects by remember { mutableStateOf<List<FreelanceProject>>(emptyList()) }
-    var loading by remember { mutableStateOf(true) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
-    var successMessage by remember { mutableStateOf<String?>(null) }
+    val state = viewModel.state.value
     var showAddDialog by remember { mutableStateOf(false) }
     var deleteProject by remember { mutableStateOf<FreelanceProject?>(null) }
     var paymentProject by remember { mutableStateOf<FreelanceProject?>(null) }
     var statusMenuProjectId by remember { mutableStateOf<String?>(null) }
-    var updatingStatusProjectId by remember { mutableStateOf<String?>(null) }
-
-    DisposableEffect(repository) {
-        val registration = repository.listenToProjects(
-            onSuccess = { result ->
-                projects = result
-                loading = false
-                errorMessage = null
-            },
-            onError = { error ->
-                loading = false
-                errorMessage = error
-            }
-        )
-
-        onDispose {
-            registration?.remove()
-        }
-    }
 
     Column(
         modifier = Modifier
@@ -110,14 +83,14 @@ fun FreelanceProjectsScreen() {
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        errorMessage?.let { message ->
+        state.error?.let { message ->
             Text(
                 text = message,
                 color = MaterialTheme.colorScheme.error
             )
             Spacer(modifier = Modifier.height(8.dp))
         }
-        successMessage?.let { message ->
+        state.message?.let { message ->
             Text(
                 text = message,
                 color = MaterialTheme.colorScheme.primary
@@ -125,16 +98,16 @@ fun FreelanceProjectsScreen() {
             Spacer(modifier = Modifier.height(8.dp))
         }
 
-        if (loading) {
+        if (state.isLoading) {
             CircularProgressIndicator()
-        } else if (projects.isEmpty()) {
+        } else if (state.projects.isEmpty()) {
             Text("No freelance projects yet. Add your first project.")
         } else {
             LazyColumn(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 items(
-                    items = projects,
+                    items = state.projects,
                     key = { it.id }
                 ) { project ->
                     FreelanceProjectCard(
@@ -142,29 +115,16 @@ fun FreelanceProjectsScreen() {
                         onDelete = { deleteProject = project }
                         ,onPayment = { paymentProject = project }
                         ,statusMenuExpanded = statusMenuProjectId == project.id
-                        ,isUpdatingStatus = updatingStatusProjectId == project.id
+                        ,isUpdatingStatus = state.updatingStatusProjectId == project.id
                         ,onStatusMenuToggle = {
-                            if (updatingStatusProjectId == null) {
+                            if (state.updatingStatusProjectId == null) {
                                 statusMenuProjectId = project.id
                             }
                         }
                         ,onStatusMenuDismiss = { statusMenuProjectId = null }
                         ,onStatusSelected = { status ->
                             statusMenuProjectId = null
-                            updatingStatusProjectId = project.id
-                            repository.updateProjectStatus(
-                                projectId = project.id,
-                                status = status,
-                                onSuccess = {
-                                    updatingStatusProjectId = null
-                                    successMessage = "Project status updated."
-                                },
-                                onError = { message ->
-                                    updatingStatusProjectId = null
-                                    successMessage = null
-                                    errorMessage = message
-                                }
-                            )
+                            viewModel.updateProjectStatus(project.id, status)
                         }
                     )
                 }
@@ -174,14 +134,14 @@ fun FreelanceProjectsScreen() {
 
     if (showAddDialog) {
         AddFreelanceProjectDialog(
-            saveError = errorMessage,
-            isSaving = saving,
+            saveError = state.error,
+            isSaving = state.isSaving,
             onDismiss = { showAddDialog = false },
             onSave = { name, client, contact, description, startDate, endDate, work, status,
                        amount, currency, rate, notes ->
-                if (saving) return@AddFreelanceProjectDialog
+                if (state.isSaving) return@AddFreelanceProjectDialog
                 if (!currencyDeps.recorder().isOwner(currencyOwner)) {
-                    errorMessage = "Account changed. Reopen this form."
+                    viewModel.showError("Account changed. Reopen this form.")
                     return@AddFreelanceProjectDialog
                 }
                 val validationError = FreelanceProjectValidator.validate(
@@ -196,7 +156,7 @@ fun FreelanceProjectsScreen() {
                 )
 
                 if (validationError != null || detailsError != null) {
-                    errorMessage = validationError ?: detailsError
+                    viewModel.showError(validationError ?: detailsError!!)
                     return@AddFreelanceProjectDialog
                 }
 
@@ -207,13 +167,12 @@ fun FreelanceProjectsScreen() {
                 )
 
                 if (values == null) {
-                    errorMessage = "Please check the project amount and exchange rate."
+                    viewModel.showError("Please check the project amount and exchange rate.")
                     return@AddFreelanceProjectDialog
                 }
 
                 val remembered = currencyDeps.recorder().capture(currency, "LKR", values.exchangeRate, currencyOwner)
-                saving = true
-                repository.addProject(
+                viewModel.addProject(
                     name = name,
                     client = client,
                     clientContact = contact,
@@ -228,14 +187,10 @@ fun FreelanceProjectsScreen() {
                     baseAmountMinor = values.baseAmountMinor,
                     notes = notes,
                     onSuccess = {
-                        saving = false
-                        scope.launch { currencyDeps.recorder().afterSave(remembered) }
-                        errorMessage = null
+                        scope.launch {
+                            currencyDeps.recorder().afterSave(remembered)
+                        }
                         showAddDialog = false
-                    },
-                    onError = { message ->
-                        saving = false
-                        errorMessage = message
                     }
                 )
             }
@@ -252,17 +207,9 @@ fun FreelanceProjectsScreen() {
             confirmButton = {
                 TextButton(
                     onClick = {
-                        repository.deleteProject(
-                            projectId = project.id,
-                            onSuccess = {
-                                deleteProject = null
-                                errorMessage = null
-                            },
-                            onError = { message ->
-                                errorMessage = message
-                                deleteProject = null
-                            }
-                        )
+                        viewModel.deleteProject(project.id) {
+                            deleteProject = null
+                        }
                     }
                 ) {
                     Text("Delete")
@@ -281,31 +228,21 @@ fun FreelanceProjectsScreen() {
     paymentProject?.let { project ->
         FreelancePaymentDialog(
             project = project,
-            isSaving = saving,
+            isSaving = state.isSaving,
             onDismiss = { paymentProject = null },
             onSave = { amount, date, note ->
                 val error = FreelanceProjectValidator.validatePayment(amount, date)
                 if (error != null) {
-                    errorMessage = error
+                    viewModel.showError(error)
                 } else {
                     val amountMinor = runCatching {
                         BigDecimal(amount).movePointRight(2).longValueExact()
                     }.getOrNull()
                     if (amountMinor == null) {
-                        errorMessage = "Enter a valid payment amount."
+                        viewModel.showError("Enter a valid payment amount.")
                     } else {
-                        saving = true
-                        scope.launch {
-                            runCatching {
-                                repository.recordPayment(project, amountMinor, date, note)
-                            }.onSuccess {
-                                saving = false
-                                paymentProject = null
-                                errorMessage = null
-                            }.onFailure {
-                                saving = false
-                                errorMessage = it.message ?: "Unable to record payment."
-                            }
+                        viewModel.recordPayment(project, amountMinor, date, note) {
+                            paymentProject = null
                         }
                     }
                 }
@@ -415,13 +352,15 @@ private fun FreelanceProjectCard(
                 modifier = Modifier.fillMaxWidth()
             )
 
-            Text(
-                "Milestones completed: ${
-                    project.milestones.count {
-                        it.status == "Completed"
-                    }
-                } / ${project.milestones.size}"
-            )
+            if (project.milestones.isNotEmpty()) {
+                Text(
+                    "Milestones completed: ${
+                        project.milestones.count {
+                            it.status == "Completed"
+                        }
+                    } / ${project.milestones.size}"
+                )
+            }
 
             if (overdueCount > 0) {
                 Text(
@@ -439,7 +378,10 @@ private fun FreelanceProjectCard(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End
             ) {
-                if (project.status == FreelanceProjectStatus.COMPLETED &&
+                if (project.status in listOf(
+                        FreelanceProjectStatus.IN_PROGRESS,
+                        FreelanceProjectStatus.COMPLETED
+                    ) &&
                     project.paymentStatus != "PAID"
                 ) {
                     TextButton(onClick = onPayment) { Text("Record payment") }
