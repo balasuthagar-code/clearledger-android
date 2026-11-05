@@ -2,6 +2,7 @@ package com.example.clearledger.ui.goals
 
 import com.example.clearledger.data.repository.SavingsGoalRepository
 import com.example.clearledger.domain.model.SavingsGoal
+import com.example.clearledger.testutil.InMemoryExpenseRepository
 import java.time.LocalDate
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -63,7 +64,7 @@ class SavingsGoalsViewModelTest {
     @Test
     fun savesExactTargetAndStartingAmounts() = runTest(dispatcher) {
         val repository = FakeRepository()
-        val viewModel = SavingsGoalsViewModel(repository)
+        val viewModel = SavingsGoalsViewModel(repository, InMemoryExpenseRepository())
         runCurrent()
 
         create(viewModel)
@@ -80,7 +81,7 @@ class SavingsGoalsViewModelTest {
     @Test
     fun allowsZeroStartingAmount() = runTest(dispatcher) {
         val repository = FakeRepository()
-        val viewModel = SavingsGoalsViewModel(repository)
+        val viewModel = SavingsGoalsViewModel(repository, InMemoryExpenseRepository())
         runCurrent()
 
         create(viewModel, starting = "0")
@@ -92,7 +93,7 @@ class SavingsGoalsViewModelTest {
     @Test
     fun rejectsInvalidTargetAmountsWithoutSaving() = runTest(dispatcher) {
         val repository = FakeRepository()
-        val viewModel = SavingsGoalsViewModel(repository)
+        val viewModel = SavingsGoalsViewModel(repository, InMemoryExpenseRepository())
         runCurrent()
 
         for (target in listOf(
@@ -110,7 +111,7 @@ class SavingsGoalsViewModelTest {
     @Test
     fun rejectsInvalidStartingAmountsWithoutSaving() = runTest(dispatcher) {
         val repository = FakeRepository()
-        val viewModel = SavingsGoalsViewModel(repository)
+        val viewModel = SavingsGoalsViewModel(repository, InMemoryExpenseRepository())
         runCurrent()
 
         for (starting in listOf(
@@ -127,7 +128,7 @@ class SavingsGoalsViewModelTest {
     @Test
     fun comparesLargeAmountsExactly() = runTest(dispatcher) {
         val repository = FakeRepository()
-        val viewModel = SavingsGoalsViewModel(repository)
+        val viewModel = SavingsGoalsViewModel(repository, InMemoryExpenseRepository())
         runCurrent()
 
         create(
@@ -144,7 +145,7 @@ class SavingsGoalsViewModelTest {
     @Test
     fun preservesNameCurrencyAndDeadlineValidation() = runTest(dispatcher) {
         val repository = FakeRepository()
-        val viewModel = SavingsGoalsViewModel(repository)
+        val viewModel = SavingsGoalsViewModel(repository, InMemoryExpenseRepository())
         runCurrent()
 
         create(viewModel, name = "")
