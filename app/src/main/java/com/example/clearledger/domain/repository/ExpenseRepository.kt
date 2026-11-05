@@ -4,6 +4,7 @@ import com.example.clearledger.core.common.Result
 import com.example.clearledger.domain.model.Expense
 import kotlinx.coroutines.flow.Flow
 
+
 interface ExpenseRepository {
     /** Real-time expenses for one month key ("YYYY-MM"). Used by the dashboard and the list. */
     fun observeExpensesForMonth(monthKey: String): Flow<List<Expense>>
