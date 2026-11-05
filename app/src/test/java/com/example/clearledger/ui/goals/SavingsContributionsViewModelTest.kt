@@ -4,6 +4,7 @@ import com.example.clearledger.data.repository.SavingsContributionRepository
 import com.example.clearledger.data.repository.SavingsGoalRepository
 import com.example.clearledger.domain.model.SavingsContribution
 import com.example.clearledger.domain.model.SavingsGoal
+import com.example.clearledger.testutil.InMemoryExpenseRepository
 import java.time.LocalDate
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -82,7 +83,7 @@ class SavingsContributionsViewModelTest {
     fun savesExactMinorUnitsInGoalCurrency() = runTest(dispatcher) {
         val repository = FakeContributions()
         val viewModel = SavingsContributionsViewModel(
-            FakeGoals("USD"), repository
+            FakeGoals("USD"), repository, InMemoryExpenseRepository()
         )
         runCurrent()
 
@@ -103,7 +104,7 @@ class SavingsContributionsViewModelTest {
     fun rejectsInvalidAmountsWithoutWriting() = runTest(dispatcher) {
         val repository = FakeContributions()
         val viewModel = SavingsContributionsViewModel(
-            FakeGoals(), repository
+            FakeGoals(), repository, InMemoryExpenseRepository()
         )
         runCurrent()
 
@@ -126,7 +127,7 @@ class SavingsContributionsViewModelTest {
     fun rejectsUnsupportedGoalCurrency() = runTest(dispatcher) {
         val repository = FakeContributions()
         val viewModel = SavingsContributionsViewModel(
-            FakeGoals("JPY"), repository
+            FakeGoals("JPY"), repository, InMemoryExpenseRepository()
         )
         runCurrent()
 
@@ -143,7 +144,7 @@ class SavingsContributionsViewModelTest {
     fun editingPreservesIdentityAndCreationTime() = runTest(dispatcher) {
         val repository = FakeContributions()
         val viewModel = SavingsContributionsViewModel(
-            FakeGoals(), repository
+            FakeGoals(), repository, InMemoryExpenseRepository()
         )
         runCurrent()
 
@@ -170,7 +171,7 @@ class SavingsContributionsViewModelTest {
     fun futureDateStillPreventsSaving() = runTest(dispatcher) {
         val repository = FakeContributions()
         val viewModel = SavingsContributionsViewModel(
-            FakeGoals(), repository
+            FakeGoals(), repository, InMemoryExpenseRepository()
         )
         runCurrent()
 
