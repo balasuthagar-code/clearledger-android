@@ -168,6 +168,8 @@ class FirestoreSavingsGoalRepository @Inject constructor(
                 }
             }
 
+    override fun observeSavingsGoals(): Flow<List<SavingsGoal>> = getSavingsGoals()
+
     override suspend fun updateSavingsGoal(goal: SavingsGoal) {
         require(goal.id.isNotBlank()) {
             "Goal ID is required."

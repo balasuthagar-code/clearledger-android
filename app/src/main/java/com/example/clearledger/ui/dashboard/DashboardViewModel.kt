@@ -9,6 +9,7 @@ import com.example.clearledger.domain.model.DueStatus
 import com.example.clearledger.domain.model.GoalSummary
 import com.example.clearledger.domain.model.MonthlySummary
 import com.example.clearledger.domain.model.SafeToSpend
+import com.example.clearledger.domain.model.SavingsGoal
 import com.example.clearledger.domain.repository.CategoryRepository
 import com.example.clearledger.domain.repository.PrimaryGoalSource
 import com.example.clearledger.domain.usecase.CalculateSafeToSpendUseCase
@@ -74,6 +75,11 @@ class DashboardViewModel @Inject constructor(
         primaryGoalSource.observePrimaryGoal()
             .catch { emit(null) }                       // a goal problem must never break the dashboard
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    val savingsGoals: StateFlow<List<SavingsGoal>> =
+        primaryGoalSource.observeSavingsGoals()
+            .catch { emit(emptyList()) }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /**
      * Recurring items due this month that are still PENDING (not confirmed, not skipped), as a base-currency
