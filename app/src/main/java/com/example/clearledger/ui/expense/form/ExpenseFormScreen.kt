@@ -1,6 +1,7 @@
 package com.example.clearledger.ui.expense.form
 
 import com.example.clearledger.currency.CurrencyRateField
+import com.example.clearledger.currency.CurrencyConversionPreview
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -230,6 +231,12 @@ fun ExpenseFormScreen(
                         CurrencyRateField(original = state.currency, value = state.rateText,
                             onChange = actions.onRateChange, editing = state.isEditing,
                             enabled = !state.isSaving, error = state.errors.rate)
+                        CurrencyConversionPreview(
+                            amountText = state.amountText,
+                            originalCurrency = state.currency,
+                            baseCurrency = Currencies.BASE,
+                            exchangeRateText = state.rateText
+                        )
                     }
 
                     Text("Paid with", style = MaterialTheme.typography.titleSmall)
