@@ -4,6 +4,7 @@ package com.example.clearledger.data.repository
 import com.example.clearledger.domain.model.IncomeSource
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import javax.inject.Inject
 
 data class IncomeSourceSummary(
     val source: IncomeSource,
@@ -12,10 +13,10 @@ data class IncomeSourceSummary(
     val amountEntryCount: Int = 0
 )
 
-class FirestoreIncomeSourceRepository(
-    private val auth: FirebaseAuth = FirebaseAuth.getInstance(),
-    private val db: FirebaseFirestore = FirebaseFirestore.getInstance()
-) {
+class FirestoreIncomeSourceRepository @Inject constructor(
+    private val auth: FirebaseAuth,
+    private val db: FirebaseFirestore
+) : IncomeSourceRepository {
     private fun uid(): String? = auth.currentUser?.uid
 
     private fun sources() =
@@ -30,7 +31,7 @@ class FirestoreIncomeSourceRepository(
                 .collection("incomeEntries")
         }
 
-    fun loadSources(
+    override fun loadSources(
         callback: (kotlin.Result<List<IncomeSourceSummary>>) -> Unit
     ) {
         val userId = uid()
@@ -106,7 +107,7 @@ class FirestoreIncomeSourceRepository(
             }
     }
 
-    fun saveSource(
+    override fun saveSource(
         source: IncomeSource,
         callback: (kotlin.Result<Unit>) -> Unit
     ) {
@@ -150,7 +151,7 @@ class FirestoreIncomeSourceRepository(
         }
     }
 
-    fun deleteSource(
+    override fun deleteSource(
         sourceId: String,
         callback: (kotlin.Result<Unit>) -> Unit
     ) {
@@ -189,7 +190,7 @@ class FirestoreIncomeSourceRepository(
             }
     }
 
-    fun setActive(
+    override fun setActive(
         sourceId: String,
         active: Boolean,
         callback: (kotlin.Result<Unit>) -> Unit

@@ -32,7 +32,6 @@ import com.example.clearledger.ui.home.HomeScreen
 import com.example.clearledger.ui.home.HomeViewModel
 import com.example.clearledger.ui.income.IncomeEntriesScreen
 import com.example.clearledger.ui.income.IncomeSourcesScreen
-import com.example.clearledger.ui.income.IncomeSourcesViewModel
 import com.example.clearledger.ui.crypto.CryptoScreen
 import com.example.clearledger.ui.freelance.FreelanceProjectsScreen
 import com.example.clearledger.ui.goals.CreateGoalScreen
@@ -245,9 +244,8 @@ fun AppNavigation() {
             IncomeEntriesScreen(onBack = { navController.popBackStack() })
         }
         composable(Routes.INCOME_SOURCES) {
-            val sourceViewModel = remember { IncomeSourcesViewModel() }
             IncomeSourcesScreen(
-                viewModel = sourceViewModel,
+                viewModel = hiltViewModel(),
                 onBack = { navController.popBackStack() },
                 onOpenEntries = { navController.navigate(Routes.INCOME_ENTRIES) }
             )

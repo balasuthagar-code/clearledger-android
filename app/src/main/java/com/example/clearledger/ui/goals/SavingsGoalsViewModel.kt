@@ -4,7 +4,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.clearledger.core.common.SavingsGoalValidator
 import com.example.clearledger.data.repository.SavingsGoalRepository
+import com.example.clearledger.domain.model.Expense
+import com.example.clearledger.domain.model.ExpenseClassification
+import com.example.clearledger.domain.model.PaymentMethod
 import com.example.clearledger.domain.model.SavingsGoal
+import com.example.clearledger.domain.repository.ExpenseRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -18,7 +22,8 @@ import com.example.clearledger.core.common.Result
 
 @HiltViewModel
 class SavingsGoalsViewModel @Inject constructor(
-    private val repository: SavingsGoalRepository
+    private val repository: SavingsGoalRepository,
+    private val expenseRepository: ExpenseRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SavingsGoalsUiState())
@@ -112,11 +117,30 @@ class SavingsGoalsViewModel @Inject constructor(
                     deadline = deadline.trim(),
                     startingSavedMinor = startingMinor                )
 
-
-
                 repository.addSavingsGoal(goal)
+                    if (startingMinor > 0L) {
+                        val expenseResult = expenseRepository.addExpense(
+                            Expense(
+                                id = "",
+                                amountMinor = startingMinor,
+                                currency = currency,
+                                exchangeRate = "1",
+                                baseAmountMinor = startingMinor,
+                                categoryId = "savings_goal",
+                                classification = ExpenseClassification.COMMITTED,
+                                paymentMethod = PaymentMethod.BANK_TRANSFER,
+                                merchant = "Savings Goal",
+                                note = "Starting amount for savings goal: ${name.trim()}",
+                                date = java.time.LocalDate.now(),
+                                monthKey = java.time.YearMonth.now().toString()
+                            )
+                        )
+                        if (expenseResult is Result.Error) {
+                            throw expenseResult.exception
+                        }
+                    }
 
-                _uiState.update {
+                    _uiState.update {
                     it.copy(
                         isSaving = false,
                         message = "Savings goal created successfully."

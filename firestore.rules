@@ -17,6 +17,17 @@ service cloud.firestore {
       match /savingsGoals/{goalId}/contributions/{contributionId} {
         allow read, write: if owner(userId);
       }
+      // Freelance payments are stored below each freelance project.
+      match /freelanceProjects/{projectId}/payments/{paymentId} {
+        allow read, write: if owner(userId);
+      }
+      // Freelance payments are also recorded in the user's income ledger.
+      match /incomeSources/{sourceId} {
+        allow read, write: if owner(userId);
+      }
+      match /incomeEntries/{entryId} {
+        allow read, write: if owner(userId);
+      }
     }
     // All other collections and arbitrary descendants are denied by default.
   }

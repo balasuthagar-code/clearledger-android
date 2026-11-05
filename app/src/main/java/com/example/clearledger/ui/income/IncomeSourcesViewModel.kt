@@ -6,15 +6,15 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import com.example.clearledger.core.common.IncomeSourceValidator
-import com.example.clearledger.data.repository.FirestoreIncomeSourceRepository
+import com.example.clearledger.data.repository.IncomeSourceRepository
 import com.example.clearledger.data.repository.IncomeSourceSummary
 import com.example.clearledger.domain.model.IncomeSource
+import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
 
-
-
-class IncomeSourcesViewModel(
-    private val repository: FirestoreIncomeSourceRepository =
-        FirestoreIncomeSourceRepository()
+@HiltViewModel
+class IncomeSourcesViewModel @Inject constructor(
+    private val repository: IncomeSourceRepository
 ) : ViewModel() {
 
     var state by mutableStateOf(IncomeSourcesUiState())

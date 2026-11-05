@@ -12,10 +12,12 @@ import java.time.LocalDate
 import java.time.ZoneId
 import java.util.Date
 
-class FreelanceProjectRepository(
-    private val auth: FirebaseAuth = FirebaseAuth.getInstance(),
-    private val db: FirebaseFirestore = FirebaseFirestore.getInstance()
-) {
+import javax.inject.Inject
+
+class FirestoreFreelanceProjectRepository @Inject constructor(
+    private val auth: FirebaseAuth,
+    private val db: FirebaseFirestore
+) : FreelanceProjectRepository {
     private fun projectsCollection() =
         auth.currentUser?.uid?.let { uid ->
             db.collection("users")
@@ -23,7 +25,7 @@ class FreelanceProjectRepository(
                 .collection("freelanceProjects")
         }
 
-    fun listenToProjects(
+    override fun listenToProjects(
         onSuccess: (List<FreelanceProject>) -> Unit,
         onError: (String) -> Unit
     ): ListenerRegistration? {
@@ -88,15 +90,15 @@ class FreelanceProjectRepository(
         }
     }
 
-    fun addProject(
+    override fun addProject(
         name: String,
         client: String,
-        clientContact: String = "",
-        description: String = "",
-        startDate: String = "",
-        endDate: String = "",
-        workDescription: String = "",
-        status: String = "PLANNED",
+        clientContact: String,
+        description: String,
+        startDate: String,
+        endDate: String,
+        workDescription: String,
+        status: String,
         agreedAmountMinor: Long,
         currency: String,
         exchangeRate: String,
@@ -150,7 +152,7 @@ class FreelanceProjectRepository(
             }
     }
 
-    suspend fun recordPayment(
+    override suspend fun recordPayment(
                 project: FreelanceProject,
                 amountMinor: Long,
                 paymentDate: String,
@@ -160,7 +162,6 @@ class FreelanceProjectRepository(
                 val projects = projectsCollection() ?: error("Please sign in before recording payment.")
                 val projectRef = projects.document(project.id)
                 val paymentId = "${project.id}_${paymentDate}_${amountMinor}"
-                val paymentRef = projectRef.collection("payments").document(paymentId)
                 val incomeRef = db.collection("users").document(user.uid)
                     .collection("incomeEntries").document("freelance_$paymentId")
                 val sourceRef = db.collection("users").document(user.uid)
@@ -169,7 +170,7 @@ class FreelanceProjectRepository(
                     .atStartOfDay(ZoneId.systemDefault()).toInstant()))
 
                 db.runTransaction { transaction ->
-                    if (transaction.get(paymentRef).exists() || transaction.get(incomeRef).exists()) {
+                    if (transaction.get(incomeRef).exists()) {
                         throw IllegalStateException("This payment has already been recorded.")
                     }
                     val current = transaction.get(projectRef)
@@ -180,11 +181,6 @@ class FreelanceProjectRepository(
                         paid > 0L -> "PARTIALLY_PAID"
                         else -> "UNPAID"
                     }
-                    transaction.set(paymentRef, mapOf(
-                        "id" to paymentId, "projectId" to project.id, "userId" to user.uid,
-                        "amountMinor" to amountMinor, "date" to date, "note" to note.trim(),
-                        "createdAt" to System.currentTimeMillis()
-                    ))
                     transaction.set(projectRef, mapOf(
                         "totalPaidBaseMinor" to paid, "paymentStatus" to status,
                         "updatedAt" to System.currentTimeMillis()
@@ -207,7 +203,7 @@ class FreelanceProjectRepository(
                 }.await()
             }
 
-    fun updateMilestones(
+    override fun updateMilestones(
         projectId: String,
         milestones: List<FreelanceMilestone>,
         onSuccess: () -> Unit,
@@ -244,7 +240,7 @@ class FreelanceProjectRepository(
             }
     }
 
-    fun updateProjectStatus(
+    override fun updateProjectStatus(
         projectId: String,
         status: String,
         onSuccess: () -> Unit,
@@ -273,7 +269,7 @@ class FreelanceProjectRepository(
             }
     }
 
-    fun deleteProject(
+    override fun deleteProject(
         projectId: String,
         onSuccess: () -> Unit,
         onError: (String) -> Unit
