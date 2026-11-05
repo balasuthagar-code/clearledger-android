@@ -34,6 +34,7 @@ import com.example.clearledger.domain.model.CategoryTotal
 import com.example.clearledger.domain.model.GoalSummary
 import com.example.clearledger.domain.model.MonthlySummary
 import com.example.clearledger.domain.model.SafeToSpend
+import com.example.clearledger.domain.model.SavingsGoal
 import com.example.clearledger.ui.expense.list.monthLabel
 
 /** Connects the ViewModel to the screen. Contains NO business logic. */
@@ -45,6 +46,7 @@ modifier: Modifier = Modifier,
     val month by viewModel.selectedMonth.collectAsStateWithLifecycle()
     val categoryNames by viewModel.categoryNames.collectAsStateWithLifecycle()
     val goal by viewModel.primaryGoal.collectAsStateWithLifecycle()
+    val savingsGoals by viewModel.savingsGoals.collectAsStateWithLifecycle()
     val safeToSpend by viewModel.safeToSpend.collectAsStateWithLifecycle()
 
     DashboardScreen(
@@ -53,6 +55,7 @@ modifier: Modifier = Modifier,
         state = state,
         categoryNames = categoryNames,
         primaryGoal = goal,
+        savingsGoals = savingsGoals,
         safeToSpend = safeToSpend,
         onPreviousMonth = viewModel::showPreviousMonth,
         onNextMonth = viewModel::showNextMonth,
@@ -71,6 +74,7 @@ fun DashboardScreen(
     state: UiState<MonthlySummary>,
     categoryNames: Map<String, String>,
     primaryGoal: GoalSummary?,
+    savingsGoals: List<SavingsGoal>,
     safeToSpend: SafeToSpend?,
     onPreviousMonth: () -> Unit,
     onNextMonth: () -> Unit,
@@ -101,14 +105,26 @@ fun DashboardScreen(
             is UiState.Success ->
                 if (state.data.isEmpty) {
                     // FR-DASH-07: nothing recorded -> guide the user.
-                    CenteredBox {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
                         Text(
                             "Nothing recorded for this month yet.\nAdd your income or an expense to see your summary.",
                             style = MaterialTheme.typography.bodyLarge
                         )
+                        SavingsGoalsCard(savingsGoals)
                     }
                 } else {
-                    SummaryContent(state.data, categoryNames, primaryGoal, safeToSpend)
+                    SummaryContent(
+                        state.data,
+                        categoryNames,
+                        primaryGoal,
+                        savingsGoals,
+                        safeToSpend
+                    )
                 }
         }
     }
@@ -124,6 +140,7 @@ private fun SummaryContent(
     summary: MonthlySummary,
     categoryNames: Map<String, String>,
     primaryGoal: GoalSummary?,
+    savingsGoals: List<SavingsGoal>,
     safeToSpend: SafeToSpend?
 ) {
     Column(
@@ -147,7 +164,37 @@ private fun SummaryContent(
         IncomeVsExpensesCard(summary)
         CommittedVsDiscretionaryCard(summary)
         CategoryBreakdownCard(summary, categoryNames)
-        GoalCard(primaryGoal)
+        SavingsGoalsCard(savingsGoals)
+    }
+}
+
+@Composable
+private fun SavingsGoalsCard(goals: List<SavingsGoal>) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Text("Savings goals", style = MaterialTheme.typography.titleMedium)
+            if (goals.isEmpty()) {
+                Text("No savings goals yet.", style = MaterialTheme.typography.bodyMedium)
+            } else {
+                goals.forEach { goal ->
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(goal.name, style = MaterialTheme.typography.titleSmall)
+                        TrackedBar(
+                            goal.progressPercentage / 100f,
+                            MaterialTheme.colorScheme.primary
+                        )
+                        AmountRow(
+                            "Saved (${goal.progressPercentage.toInt()}%)",
+                            goal.savedAmountMinor
+                        )
+                        AmountRow("Target", goal.targetAmountMinor)
+                    }
+                }
+            }
+        }
     }
 }
 // ---------- FR-DASH-08: safe to spend ----------

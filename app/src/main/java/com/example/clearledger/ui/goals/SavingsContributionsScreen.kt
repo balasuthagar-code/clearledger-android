@@ -77,7 +77,7 @@ fun SavingsContributionsScreen(
             LazyColumn(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(100.dp),
+                    .height(180.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 items(state.goals, key = { it.id }) { goal ->
@@ -86,10 +86,13 @@ fun SavingsContributionsScreen(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text(
-                            if (state.selectedGoal?.id == goal.id) {
-                                "✓ ${goal.name}"
-                            } else {
-                                goal.name
+                            buildString {
+                                if (state.selectedGoal?.id == goal.id) append("✓ ")
+                                append(goal.name)
+                                append(" — ")
+                                append(goal.currency)
+                                append(" ")
+                                append(formatMinorAmount(goal.targetAmountMinor))
                             }
                         )
                     }
